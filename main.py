@@ -1,4 +1,5 @@
 import os
+import random
 import requests
 import subprocess
 import txthtml
@@ -6,6 +7,7 @@ from pyromod import listen
 from vars import API_ID, API_HASH, BOT_TOKEN, CREDIT, FORCE_SUB_CHANNEL
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.errors import UserNotParticipant  # ✅ Added missing import
 
 # Initialize the bot
 bot = Client(
@@ -15,10 +17,17 @@ bot = Client(
     bot_token=BOT_TOKEN
 )
 
+
+#=====================================================================================
+#                        FORCE SUBSCRIBE CHECKER (Fixed indentation)
+#=====================================================================================
 async def is_subscribed(user_id: int, channel: str) -> bool:
-#=====================================================================================
-#                        FORCE SUBSCRIBE CHECKER (No changes here)
-#=====================================================================================
+    try:
+        user = await bot.get_chat_member(channel, user_id)
+        return user.status not in ("left", "kicked")
+    except Exception:
+        return False
+
 
 def get_force_sub_buttons():
     return InlineKeyboardMarkup([
@@ -26,6 +35,7 @@ def get_force_sub_buttons():
         [InlineKeyboardButton("📷 Follow on Instagram", url="https://instagram.com/babubhaikundan")],
         [InlineKeyboardButton("✅ I've Joined", callback_data="checksub")]
     ])
+
 
 async def check_force_sub(client, message):
     try:
@@ -48,11 +58,12 @@ async def check_force_sub(client, message):
         return False
     return True
 
+
 #=====================================================================================
-#                                CALLBACK HANDLERS (No changes here)
+#                                CALLBACK HANDLERS
 #=====================================================================================
 
-@Client.on_callback_query(filters.regex("^checksub$"))
+@bot.on_callback_query(filters.regex("^checksub$"))
 async def recheck_sub(client, callback_query: CallbackQuery):
     try:
         user = await client.get_chat_member(FORCE_SUB_CHANNEL, callback_query.from_user.id)
@@ -70,13 +81,19 @@ async def recheck_sub(client, callback_query: CallbackQuery):
     await callback_query.message.delete()
     await client.send_message(callback_query.from_user.id, "Welcome! 🎉\nSend me a file to get started.")
 
-@Client.on_callback_query(filters.regex("^close_data$"))
+
+@bot.on_callback_query(filters.regex("^close_data$"))
 async def close_handler(client, callback_query: CallbackQuery):
     await callback_query.message.delete()
     await callback_query.answer()
 
-    # If subscribed, continue with existing flow
-    editable = await message.reply_text("𝐖𝐞𝐥𝐜𝐨𝐦𝐞! 𝐏𝐥𝐞𝐚𝐬𝐞 𝐮𝐩𝐥𝐨𝐚𝐝 𝐚 .txt 𝐟𝐢𝐥𝐞 𝐜𝐨𝐧𝐭𝐚𝐢𝐧𝐢𝐧𝐠 links (videos/pdf/others).")
+    message = callback_query.message  # ✅ Fixed undefined variable
+
+    # Ask for txt file
+    editable = await message.reply_text(
+        "𝐖𝐞𝐥𝐜𝐨𝐦𝐞! 𝐏𝐥𝐞𝐚𝐬𝐞 𝐮𝐩𝐥𝐨𝐚𝐝 𝐚 .txt 𝐟𝐢𝐥𝐞 𝐜𝐨𝐧𝐭𝐚𝐢𝐧𝐢𝐧𝐠 links (videos/pdf/others)."
+    )
+
     # Listen for the next message (file upload)
     input_msg: Message = await bot.listen(editable.chat.id)
 
@@ -91,7 +108,7 @@ async def close_handler(client, callback_query: CallbackQuery):
     with open(file_path, "r", encoding="utf-8") as f:
         file_content = f.read()
 
-    # Use txthtml utilities (assumes these functions exist in txthtml)
+    # Use txthtml utilities
     urls = txthtml.extract_names_and_urls(file_content)
     videos, pdfs, others = txthtml.categorize_urls(urls)
     html_content = txthtml.generate_html(file_name, videos, pdfs, others)
@@ -103,21 +120,26 @@ async def close_handler(client, callback_query: CallbackQuery):
 
     # Send HTML back
     await message.reply_document(
-    document=html_file_path,
-    caption=f"✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞!\n<blockquote><b>`{file_name}`</b></blockquote>\n❖** Open in Chrome.**❖\n\n📥𝐄𝐱𝐭𝐫𝐚𝐜𝐭𝐞𝐝 𝐁𝐲➤**<a href='https://t.me/kundan_yadav_bot'>{CREDIT}</a>**"
+        document=html_file_path,
+        caption=(
+            f"✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞!\n"
+            f"<blockquote><b>`{file_name}`</b></blockquote>\n"
+            f"❖** Open in Chrome.**❖\n\n"
+            f"📥𝐄𝐱𝐭𝐫𝐚𝐜𝐭𝐞𝐝 𝐁𝐲➤**<a href='https://t.me/kundan_yadav_bot'>{CREDIT}</a>**"
+        )
     )
 
     # Clean up
     try:
         os.remove(file_path)
-    except Exception:
-        pass
-    try:
         os.remove(html_file_path)
     except Exception:
         pass
 
-# Run the bot
+
+#=====================================================================================
+#                                RUN THE BOT
+#=====================================================================================
 if __name__ == "__main__":
     print("Bot is running...")
     bot.run()
