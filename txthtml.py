@@ -1,3 +1,84 @@
+import os
+import re
+
+def extract_names_and_urls(file_content):
+    """
+    Extracts (name, url) pairs from the raw text content. This function is required by main.py.
+    """
+    lines = file_content.strip().split("\n")
+    data = []
+    for line in lines:
+        if ":" in line:
+            parts = line.split(":", 1)
+            name = parts[0].strip()
+            url = parts[1].strip()
+            if name and url:
+                data.append((name, url))
+    return data
+
+def parse_line(name):
+    """
+    Smarter parsing to identify subject and title from various formats.
+    """
+    # Pattern 1: (Subject by Teacher) Anything else
+    match = re.search(r'^\((.*?)\)', name)
+    if match:
+        subject = match.group(1).strip()
+        title = name.replace(match.group(0), '').strip().lstrip('|| ').strip()
+        return subject, title
+
+    # Pattern 2: Subject by Teacher || Title
+    match = re.search(r'^(.*? (?:by|By) (?:Sir|Mam))\s*\|\|\s*(.*)', name)
+    if match:
+        return match.group(1).strip(), match.group(2).strip()
+
+    # Pattern 3 (Fallback): Anything before || is the subject/topic
+    if '||' in name:
+        parts = name.split('||', 1)
+        return parts[0].strip(), parts[1].strip()
+        
+    # Final fallback
+    return "Miscellaneous", name
+
+def structure_data_in_order(urls):
+    """
+    Processes URLs sequentially to maintain their original order and groups them by subject.
+    Links PDFs and videos of the same lecture together.
+    """
+    structured_list = []
+    subject_map = {}
+    
+    temp_map = {}
+    for name, url in urls:
+        if name not in temp_map:
+            temp_map[name] = {"videos": [], "pdfs": []}
+        if ".pdf" in url.lower():
+            temp_map[name]["pdfs"].append(url)
+        else:
+            temp_map[name]["videos"].append(url)
+            
+    processed_names = set()
+    for name, _ in urls:
+        if name in processed_names:
+            continue
+        
+        subject, title = parse_line(name)
+        lecture_data = temp_map[name]
+
+        if subject not in subject_map:
+            new_subject = {"name": subject, "lectures": []}
+            subject_map[subject] = new_subject
+            structured_list.append(new_subject)
+            
+        subject_map[subject]["lectures"].append({
+            "title": title,
+            "videos": lecture_data["videos"],
+            "pdfs": lecture_data["pdfs"]
+        })
+        processed_names.add(name)
+        
+    return structured_list
+
 def generate_html(file_name, structured_list):
     """
     Generates the final HTML with the good design and the powerful new player features.
