@@ -3,7 +3,7 @@ import requests
 import subprocess
 import txthtml
 from pyromod import listen
-from vars import API_ID, API_HASH, BOT_TOKEN, CREDIT, FORCE_CHANNEL
+from vars import API_ID, API_HASH, BOT_TOKEN, CREDIT, FORCE_SUB_CHANNEL
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
