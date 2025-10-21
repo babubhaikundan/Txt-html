@@ -1,84 +1,3 @@
-import os
-import re
-
-def extract_names_and_urls(file_content):
-    """
-    Extracts (name, url) pairs from the raw text content. This function is required by main.py.
-    """
-    lines = file_content.strip().split("\n")
-    data = []
-    for line in lines:
-        if ":" in line:
-            parts = line.split(":", 1)
-            name = parts[0].strip()
-            url = parts[1].strip()
-            if name and url:
-                data.append((name, url))
-    return data
-
-def parse_line(name):
-    """
-    Smarter parsing to identify subject and title from various formats.
-    """
-    # Pattern 1: (Subject by Teacher) Anything else
-    match = re.search(r'^\((.*?)\)', name)
-    if match:
-        subject = match.group(1).strip()
-        title = name.replace(match.group(0), '').strip().lstrip('|| ').strip()
-        return subject, title
-
-    # Pattern 2: Subject by Teacher || Title
-    match = re.search(r'^(.*? (?:by|By) (?:Sir|Mam))\s*\|\|\s*(.*)', name)
-    if match:
-        return match.group(1).strip(), match.group(2).strip()
-
-    # Pattern 3 (Fallback): Anything before || is the subject/topic
-    if '||' in name:
-        parts = name.split('||', 1)
-        return parts[0].strip(), parts[1].strip()
-        
-    # Final fallback
-    return "Miscellaneous", name
-
-def structure_data_in_order(urls):
-    """
-    Processes URLs sequentially to maintain their original order and groups them by subject.
-    Links PDFs and videos of the same lecture together.
-    """
-    structured_list = []
-    subject_map = {}
-    
-    temp_map = {}
-    for name, url in urls:
-        if name not in temp_map:
-            temp_map[name] = {"videos": [], "pdfs": []}
-        if ".pdf" in url.lower():
-            temp_map[name]["pdfs"].append(url)
-        else:
-            temp_map[name]["videos"].append(url)
-            
-    processed_names = set()
-    for name, _ in urls:
-        if name in processed_names:
-            continue
-        
-        subject, title = parse_line(name)
-        lecture_data = temp_map[name]
-
-        if subject not in subject_map:
-            new_subject = {"name": subject, "lectures": []}
-            subject_map[subject] = new_subject
-            structured_list.append(new_subject)
-            
-        subject_map[subject]["lectures"].append({
-            "title": title,
-            "videos": lecture_data["videos"],
-            "pdfs": lecture_data["pdfs"]
-        })
-        processed_names.add(name)
-        
-    return structured_list
-
 def generate_html(file_name, structured_list):
     """
     Generates the final HTML with the good design and the powerful new player features.
@@ -138,6 +57,7 @@ def generate_html(file_name, structured_list):
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <link href="https://unpkg.com/@videojs/themes@1/dist/city/index.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/videojs-seek-buttons/dist/videojs-seek-buttons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/videojs-overlay/dist/videojs-overlay.css" rel="stylesheet">
     <style>
         :root {{ --primary-color: #007bff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c; }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
@@ -159,12 +79,54 @@ def generate_html(file_name, structured_list):
         .video-item.playing, .video-item:hover {{ background-color: #007bff; color: white; border-color: #007bff; transform: translateY(-2px); }}
         .pdf-item {{ background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3; }}
         .pdf-item:hover {{ background-color: #ff5722; color: white; border-color: #ff5722; }}
+        
+        /* Enhanced Video Player Styles */
+        .video-js {{ width: 100%; height: 0; padding-top: 56.25%; /* 16:9 Aspect Ratio */ }}
+        .video-js .vjs-big-play-button {{ font-size: 3em; line-height: 1.5; height: 1.5em; width: 3em; border-radius: 0.3em; background-color: rgba(0, 0, 0, 0.45); border: 0.15em solid rgba(255, 255, 255, 0.3); }}
+        .video-js .vjs-control-bar {{ background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }}
+        .video-js .vjs-slider {{ background-color: rgba(255, 255, 255, 0.3); }}
+        .video-js .vjs-play-progress, .video-js .vjs-volume-level {{ background-color: #007bff; }}
+        .video-js .vjs-progress-holder:hover .vjs-play-progress {{ background-color: #0056b3; }}
+        
+        /* Quality Selector Custom Styles */
+        .vjs-quality-selector {{ position: relative; }}
+        .vjs-quality-selector .vjs-menu {{ left: -4em; }}
+        
+        /* Speed Control Custom Styles */
+        .vjs-playback-rate .vjs-menu {{ left: -2em; }}
+        
+        /* Picture in Picture Button */
+        .vjs-pip-button {{ cursor: pointer; }}
+        
+        /* Network Status Indicator */
+        .network-indicator {{ position: absolute; top: 10px; right: 10px; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }}
+        .network-indicator.good {{ background: rgba(0, 128, 0, 0.7); }}
+        .network-indicator.medium {{ background: rgba(255, 165, 0, 0.7); }}
+        .network-indicator.poor {{ background: rgba(255, 0, 0, 0.7); }}
+        
+        /* Buffering Indicator */
+        .buffering-indicator {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 16px; z-index: 10; display: none; }}
+        
+        /* Loading Animation */
+        .vjs-loading-spinner {{ display: none; }}
+        .custom-loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; border: 5px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #007bff; animation: spin 1s ease-in-out infinite; z-index: 10; display: none; }}
+        @keyframes spin {{ to {{ transform: translate(-50%, -50%) rotate(360deg); }} }}
     </style>
 </head>
 <body>
     <div class="header">{file_name}</div>
     <div class="main-container">
-        <div class="player-wrapper"><video id="kundan-player" class="video-js vjs-theme-city" controls preload="auto"></video></div>
+        <div class="player-wrapper">
+            <div class="network-indicator" id="networkIndicator">Checking connection...</div>
+            <div class="buffering-indicator" id="bufferingIndicator">Buffering...</div>
+            <div class="custom-loading" id="customLoading"></div>
+            <video id="kundan-player" class="video-js vjs-theme-city" controls preload="auto" data-setup='{{}}'>
+                <p class="vjs-no-js">
+                    To view this video please enable JavaScript, and consider upgrading to a web browser that
+                    <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>.
+                </p>
+            </video>
+        </div>
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search for lectures..." onkeyup="filterContent()"></div>
         <div id="content-container">{content_html}</div>
     </div>
@@ -174,15 +136,145 @@ def generate_html(file_name, structured_list):
     <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.0.0/dist/videojs-contrib-quality-levels.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/videojs-hls-quality-selector@1.1.4/dist/videojs-hls-quality-selector.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/videojs-seek-buttons/dist/videojs-seek-buttons.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-overlay/dist/videojs-overlay.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-pip-button/dist/videojs-pip-button.min.js"></script>
     <script>
+        // Network Quality Detection
+        let networkQuality = 'good';
+        let connectionSpeed = 0;
+        
+        function detectNetworkQuality() {{
+            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const networkIndicator = document.getElementById('networkIndicator');
+            
+            if (connection) {{
+                connectionSpeed = connection.downlink || 0;
+                
+                if (connectionSpeed > 5) {{
+                    networkQuality = 'good';
+                    networkIndicator.textContent = 'Good Connection';
+                    networkIndicator.className = 'network-indicator good';
+                }} else if (connectionSpeed > 1.5) {{
+                    networkQuality = 'medium';
+                    networkIndicator.textContent = 'Medium Connection';
+                    networkIndicator.className = 'network-indicator medium';
+                }} else {{
+                    networkQuality = 'poor';
+                    networkIndicator.textContent = 'Slow Connection';
+                    networkIndicator.className = 'network-indicator poor';
+                }}
+            }} else {{
+                // Fallback: Use a simple bandwidth test
+                const img = new Image();
+                const startTime = new Date().getTime();
+                img.onload = function() {{
+                    const endTime = new Date().getTime();
+                    const duration = (endTime - startTime) / 1000;
+                    const speed = (img.fileSize / 1048576) / duration; // MBps
+                    
+                    if (speed > 5) {{
+                        networkQuality = 'good';
+                        networkIndicator.textContent = 'Good Connection';
+                        networkIndicator.className = 'network-indicator good';
+                    }} else if (speed > 1.5) {{
+                        networkQuality = 'medium';
+                        networkIndicator.textContent = 'Medium Connection';
+                        networkIndicator.className = 'network-indicator medium';
+                    }} else {{
+                        networkQuality = 'poor';
+                        networkIndicator.textContent = 'Slow Connection';
+                        networkIndicator.className = 'network-indicator poor';
+                    }}
+                }};
+                img.src = 'https://www.google.com/images/phd/px.gif?' + startTime;
+                img.fileSize = 40000; // Approximate file size in bytes
+            }}
+            
+            // Hide the indicator after 3 seconds
+            setTimeout(() => {{
+                networkIndicator.style.display = 'none';
+            }}, 3000);
+        }}
+        
+        // Initialize network quality detection
+        detectNetworkQuality();
+        
+        // Player initialization
         const player = videojs('kundan-player', {{
             fluid: true,
+            html5: {{
+                hls: {{
+                    enableLowInitialPlaylist: true,
+                    smoothQualityChange: true,
+                    overrideNative: true
+                }}
+            }},
             plugins: {{
-                hlsQualitySelector: {{ displayCurrentQuality: true }},
-                seekButtons: {{ forward: 10, back: 10 }}
+                hlsQualitySelector: {{
+                    displayCurrentQuality: true,
+                    default: 'auto' // Default to auto quality
+                }},
+                seekButtons: {{
+                    forward: 10,
+                    back: 10
+                }},
+                pipButton: {{}}
             }}
         }});
-
+        
+        // Custom loading indicator
+        const customLoading = document.getElementById('customLoading');
+        const bufferingIndicator = document.getElementById('bufferingIndicator');
+        
+        player.on('loadstart', function() {{
+            customLoading.style.display = 'block';
+        }});
+        
+        player.on('canplay', function() {{
+            customLoading.style.display = 'none';
+        }});
+        
+        player.on('waiting', function() {{
+            bufferingIndicator.style.display = 'block';
+        }});
+        
+        player.on('playing', function() {{
+            bufferingIndicator.style.display = 'none';
+        }});
+        
+        // Auto quality selection based on network
+        player.on('loadedmetadata', function() {{
+            if (player.hlsQualitySelector) {{
+                const qualityLevels = player.qualityLevels();
+                if (qualityLevels && qualityLevels.length > 0) {{
+                    // Auto-select quality based on network
+                    if (networkQuality === 'good') {{
+                        // Select highest quality
+                        for (let i = qualityLevels.length - 1; i >= 0; i--) {{
+                            if (qualityLevels[i].enabled) {{
+                                qualityLevels[i].enabled = true;
+                                for (let j = 0; j < qualityLevels.length; j++) {{
+                                    if (i !== j) qualityLevels[j].enabled = false;
+                                }}
+                                break;
+                            }}
+                        }}
+                    }} else if (networkQuality === 'medium') {{
+                        // Select medium quality
+                        const midIndex = Math.floor(qualityLevels.length / 2);
+                        for (let i = 0; i < qualityLevels.length; i++) {{
+                            qualityLevels[i].enabled = (i === midIndex);
+                        }}
+                    }} else {{
+                        // Select lowest quality
+                        for (let i = 0; i < qualityLevels.length; i++) {{
+                            qualityLevels[i].enabled = (i === 0);
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
         // YouTube-like Double-tap to seek
         let lastTap = 0;
         player.on('touchstart', (event) => {{
@@ -194,19 +286,84 @@ def generate_html(file_name, structured_list):
             }}
             lastTap = now;
         }});
-
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {{
+            if (player.el().contains(document.activeElement) || document.activeElement === document.body) {{
+                switch(e.key) {{
+                    case ' ':
+                        e.preventDefault();
+                        if (player.paused()) {{
+                            player.play();
+                        }} else {{
+                            player.pause();
+                        }}
+                        break;
+                    case 'ArrowRight':
+                        player.currentTime(player.currentTime() + 5);
+                        break;
+                    case 'ArrowLeft':
+                        player.currentTime(player.currentTime() - 5);
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        player.volume(Math.min(player.volume() + 0.1, 1));
+                        break;
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        player.volume(Math.max(player.volume() - 0.1, 0));
+                        break;
+                    case 'f':
+                        if (player.isFullscreen()) {{
+                            player.exitFullscreen();
+                        }} else {{
+                            player.requestFullscreen();
+                        }}
+                        break;
+                    case 'm':
+                        player.muted(!player.muted());
+                        break;
+                }}
+            }}
+        }});
+        
+        // Quality change notification
+        player.on('hlsQualitySelector-qualityChange', function(event, quality) {{
+            player.ready(function() {{
+                player.overlay({{
+                    content: `Quality: ${{quality.label}}`,
+                    align: 'top-right',
+                    showBackground: true
+                }});
+                
+                setTimeout(() => {{
+                    player.overlay();
+                }}, 2000);
+            }});
+        }});
+        
         let currentlyPlaying = null;
         function playVideo(event, url, element) {{
             event.preventDefault(); // <-- FIXES PAGE JUMPING
+            
+            // Show loading indicator
+            customLoading.style.display = 'block';
+            
+            // Detect network quality before playing
+            detectNetworkQuality();
+            
             if (url.toLowerCase().includes('.m3u8')) {{
                 player.src({{ src: url, type: 'application/x-mpegURL' }});
             }} else {{
                 player.src({{ src: url, type: 'video/mp4' }});
             }}
-            player.play();
-            if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
-            element.classList.add('playing');
-            currentlyPlaying = element;
+            
+            player.ready(function() {{
+                player.play();
+                if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
+                element.classList.add('playing');
+                currentlyPlaying = element;
+            }});
         }}
 
         // Accordion and Search script
