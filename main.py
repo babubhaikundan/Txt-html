@@ -16,52 +16,64 @@ bot = Client(
 )
 
 async def is_subscribed(user_id: int, channel: str) -> bool:
-    """
-    Check if a user is a member of the specified channel.
-    channel can be a username like @MyChannel or an invite URL.
-    The bot must be a member of the channel for this to work.
-    """
+#=====================================================================================
+#                        FORCE SUBSCRIBE CHECKER (No changes here)
+#=====================================================================================
+
+def get_force_sub_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📢 Join Update Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")],
+        [InlineKeyboardButton("📷 Follow on Instagram", url="https://instagram.com/babubhaikundan")],
+        [InlineKeyboardButton("✅ I've Joined", callback_data="checksub")]
+    ])
+
+async def check_force_sub(client, message):
     try:
-        member = await bot.get_chat_member(channel, user_id)
-        return member.status in ("creator", "administrator", "member", "restricted")
-    except Exception:
-        # get_chat_member may fail if bot is not in channel or channel invalid
+        user = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
+        if user.status in ("left", "kicked"):
+            raise UserNotParticipant
+    except UserNotParticipant:
+        await message.reply_photo(
+            photo=random.choice([
+                "https://s.tfrbot.com/h/Vf6F3e", "https://s.tfrbot.com/h/g5lIWO",
+                "https://s.tfrbot.com/h/sRMf7S", "https://s.tfrbot.com/h/xfeZKC",
+                "https://s.tfrbot.com/h/QCvWqP"
+            ]),
+            caption=f"<b>Hi {message.from_user.mention},\n\nTo use this bot, you must join our channel first.</b>",
+            reply_markup=get_force_sub_buttons()
+        )
         return False
+    except Exception as e:
+        await message.reply(f"🚫 An error occurred: `{e}`", quote=True)
+        return False
+    return True
 
-@bot.on_callback_query(filters.regex(r"^check_sub$"))
-async def check_subscription(client: Client, callback: CallbackQuery):
-    """
-    Handler for the 'I Joined' button after forced-subscribe message.
-    If user is now subscribed, ask them to start again or upload file.
-    """
-    user_id = callback.from_user.id
-    if await is_subscribed(user_id, FORCE_CHANNEL):
-        await callback.message.edit_text(
-            "✅ Thanks for joining the channel! Now please send /start again or upload your .txt file to continue."
-        )
-    else:
-        await callback.answer("Aap abhi bhi channel ke member nahin hain. Pehle join karein.", show_alert=True)
+#=====================================================================================
+#                                CALLBACK HANDLERS (No changes here)
+#=====================================================================================
 
-@bot.on_message(filters.command(["start"]))
-async def txt_handler(bot: Client, message: Message):
-    # Force subscribe check
-    if not await is_subscribed(message.from_user.id, FORCE_CHANNEL):
-        # Build join URL: if FORCE_CHANNEL is a full link, use it; otherwise assume @username
-        if FORCE_CHANNEL.startswith("http"):
-            join_url = FORCE_CHANNEL
-        else:
-            join_url = f"https://t.me/{FORCE_CHANNEL.lstrip('@')}"
-        keyboard = InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("Join Channel", url=join_url)],
-                [InlineKeyboardButton("✅ I Joined", callback_data="check_sub")]
-            ]
-        )
-        await message.reply_text(
-            "Kripya pehle hamare channel ko join karein to bot ka istemal kar sakein.",
-            reply_markup=keyboard
-        )
+@Client.on_callback_query(filters.regex("^checksub$"))
+async def recheck_sub(client, callback_query: CallbackQuery):
+    try:
+        user = await client.get_chat_member(FORCE_SUB_CHANNEL, callback_query.from_user.id)
+        if user.status in ("left", "kicked"):
+            await callback_query.answer("💀Abbey yaar channel join kar lo...", show_alert=True)
+            return
+    except UserNotParticipant:
+        await callback_query.answer("💀Abbey yaar channel join kar lo...", show_alert=True)
         return
+    except Exception as e:
+        await callback_query.answer(f"🚫 Error: {e}", show_alert=True)
+        return
+
+    await callback_query.answer("✅ Thank you for joining!", show_alert=False)
+    await callback_query.message.delete()
+    await client.send_message(callback_query.from_user.id, "Welcome! 🎉\nSend me a file to get started.")
+
+@Client.on_callback_query(filters.regex("^close_data$"))
+async def close_handler(client, callback_query: CallbackQuery):
+    await callback_query.message.delete()
+    await callback_query.answer()
 
     # If subscribed, continue with existing flow
     editable = await message.reply_text("𝐖𝐞𝐥𝐜𝐨𝐦𝐞! 𝐏𝐥𝐞𝐚𝐬𝐞 𝐮𝐩𝐥𝐨𝐚𝐝 𝐚 .txt 𝐟𝐢𝐥𝐞 𝐜𝐨𝐧𝐭𝐚𝐢𝐧𝐢𝐧𝐠 links (videos/pdf/others).")
