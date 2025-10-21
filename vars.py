@@ -8,7 +8,12 @@ API_HASH = environ.get("API_HASH", "c1ca68108649edb2fb0b1e78fe03e780")
 BOT_TOKEN = environ.get("BOT_TOKEN", "")
 CREDIT = environ.get("CREDIT", "𝕂𝕦𝕟𝕕𝕒𝕟 𝕐𝕒𝕕𝕒𝕧😎")
 
+
+# FORCE_CHANNEL: either a public username like "@MyChannel" OR a full invite link like "https://t.me/joinchat/AAAA..."
+# Replace the value below with your channel. Bot must be added to the channel.
+FORCE_CHANNEL = "@BabuBhaiKundan"
 #WEBHOOK = True  # Don't change this
 #PORT = int(os.environ.get("PORT", 8080))  # Default to 8000 if not set
+
 
 
