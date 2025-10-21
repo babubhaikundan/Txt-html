@@ -62,6 +62,29 @@ async def check_force_sub(client, message):
 #=====================================================================================
 #                                CALLBACK HANDLERS
 #=====================================================================================
+#=====================================================================================
+#                                START COMMAND HANDLER
+#=====================================================================================
+@bot.on_message(filters.command("start") & filters.private)
+async def start_command(client, message: Message):
+    # Check if user joined the required channel
+    if not await check_force_sub(client, message):
+        return
+
+    # If subscribed, show welcome message
+    await message.reply_photo(
+        photo="https://s.tfrbot.com/h/sRMf7S",
+        caption=(
+            f"👋 Hello {message.from_user.mention}!\n\n"
+            "Welcome to the **TXT → HTML Extractor Bot** 🪄\n"
+            "Just upload a `.txt` file containing links (videos, pdfs, etc.) and I'll convert it into a neat HTML file.\n\n"
+            "✨ Let's get started!"
+        ),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 Updates", url=f"https://t.me/{FORCE_SUB_CHANNEL}")],
+            [InlineKeyboardButton("🚀 Start Conversion", callback_data="close_data")]
+        ])
+    )
 
 @bot.on_callback_query(filters.regex("^checksub$"))
 async def recheck_sub(client, callback_query: CallbackQuery):
