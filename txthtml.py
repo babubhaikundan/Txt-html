@@ -1,12 +1,9 @@
 import os
 import re
 
-# NOTE: The 'subprocess' and 'CREDIT' imports are not needed as the template is self-contained.
-
 def extract_names_and_urls(file_content):
     """
-    (FIXED) This function was missing. It's back now.
-    It reads the raw text and splits it into (name, url) pairs.
+    Extracts (name, url) pairs from the raw text content. This function is required by main.py.
     """
     lines = file_content.strip().split("\n")
     data = []
@@ -21,7 +18,7 @@ def extract_names_and_urls(file_content):
 
 def parse_line(name):
     """
-    Smarter parsing to identify subject and title while maintaining order.
+    Smarter parsing to identify subject and title from various formats.
     """
     # Pattern 1: (Subject by Teacher) Anything else
     match = re.search(r'^\((.*?)\)', name)
@@ -40,29 +37,26 @@ def parse_line(name):
         parts = name.split('||', 1)
         return parts[0].strip(), parts[1].strip()
         
-    # Final fallback if no recognizable patterns are found
+    # Final fallback
     return "Miscellaneous", name
 
 def structure_data_in_order(urls):
     """
-    Processes a list of (name, url) tuples, maintaining the original order,
-    grouping lectures under subjects, and linking related videos and PDFs.
+    Processes URLs sequentially to maintain their original order and groups them by subject.
+    Links PDFs and videos of the same lecture together.
     """
     structured_list = []
     subject_map = {}
     
-    # First, pre-process all URLs to group videos and PDFs by their exact name
     temp_map = {}
     for name, url in urls:
         if name not in temp_map:
             temp_map[name] = {"videos": [], "pdfs": []}
-        
         if ".pdf" in url.lower():
             temp_map[name]["pdfs"].append(url)
-        else:  # Assume anything not a PDF is a video
+        else:
             temp_map[name]["videos"].append(url)
             
-    # Now, iterate through the original list to maintain order
     processed_names = set()
     for name, _ in urls:
         if name in processed_names:
@@ -71,13 +65,11 @@ def structure_data_in_order(urls):
         subject, title = parse_line(name)
         lecture_data = temp_map[name]
 
-        # If this is a new subject, create an entry for it
         if subject not in subject_map:
-            new_subject_group = {"name": subject, "lectures": []}
-            subject_map[subject] = new_subject_group
-            structured_list.append(new_subject_group)
+            new_subject = {"name": subject, "lectures": []}
+            subject_map[subject] = new_subject
+            structured_list.append(new_subject)
             
-        # Add the lecture to the correct subject group
         subject_map[subject]["lectures"].append({
             "title": title,
             "videos": lecture_data["videos"],
@@ -89,13 +81,11 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML by populating the user-provided template with dynamic content.
+    Generates the final HTML with the good design and the powerful new player features.
     """
-    
-    # --- Part 1: Generate the dynamic HTML for the lecture list (accordion) ---
     content_html = ""
     if not structured_list:
-        content_html = "<p class='text-center text-white'>No content found to display.</p>"
+        content_html = "<p class='text-center'>No content found to display.</p>"
     else:
         # Create a unique ID for each accordion item to prevent conflicts
         item_id_counter = 0
@@ -106,81 +96,137 @@ def generate_html(file_name, structured_list):
             lecture_html = ""
             for lecture in lectures:
                 title = lecture["title"]
-                video_links = "".join(f'<button class="btn btn-primary btn-sm m-1" onclick="playVideo(event, \'{url}\')"><i class="bi bi-play-circle"></i> Play Video</button>' for url in lecture["videos"])
-                pdf_links = "".join(f'<a href="{url}" target="_blank" class="btn btn-danger btn-sm m-1"><i class="bi bi-file-earmark-pdf"></i> View PDF</a>' for url in lecture["pdfs"])
+                video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, \'{url}\', this)"><i class="fa-solid fa-circle-play"></i> Play Video</a>' for url in lecture["videos"])
+                pdf_links = "".join(f'<a href="{url}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> View PDF</a>' for url in lecture["pdfs"])
                 
                 lecture_html += f"""
-                <div class="list-group-item bg-dark text-light border-secondary">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">{title}</h6>
-                    </div>
-                    <div class="d-flex mt-2">
-                        {video_links}{pdf_links}
-                    </div>
+                <div class="lecture-entry">
+                    <p class="lecture-title">{title}</p>
+                    <div class="lecture-links">{video_links}{pdf_links}</div>
                 </div>
                 """
             
             item_id = f"item{item_id_counter}"
             content_html += f"""
-            <div class="accordion-item bg-dark">
-                <h2 class="accordion-header" id="heading-{item_id}">
-                    <button class="accordion-button bg-dark text-white collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{item_id}">
-                        {subject_name}
-                    </button>
-                </h2>
-                <div id="collapse-{item_id}" class="accordion-collapse collapse" data-bs-parent="#lectureAccordion">
-                    <div class="accordion-body p-0">
-                        <div class="list-group">
-                            {lecture_html}
-                        </div>
-                    </div>
-                </div>
+            <div class="accordion-item">
+                <button class="accordion-header">{subject_name}</button>
+                <div class="accordion-content">{lecture_html}</div>
             </div>
             """
             item_id_counter += 1
 
-    # --- Part 2: The Base HTML Template ---
-    HTML_TEMPLATE = """
+    new_footer = f"""
+    <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+        <a href="https://babubhaikundan.blogspot.com" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; background: #222; padding: 8px 16px; border-radius: 20px; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" style="width: 20px; height: 20px;">
+            <span style="color: #00ffc8; font-weight: bold; font-size: 15px;">Developer💀:-</span>
+            <span style="display: flex; align-items: center; gap: 5px; color: #FFD700; font-size: 15px; font-weight: bold;">
+                𝕂𝕦𝕟𝕕𝕒𝕟 𝕐𝕒𝕕𝕒𝕧 <img src="https://s.tfrbot.com/h/gL5VTi" alt="Kundan" style="width: 22px; height: 22px; border-radius: 50%;">
+            </span>
+        </a>
+    </div>
+    """
+
+    return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <link rel="shortcut icon" href="https://s.tfrbot.com/h/gL5VTi" type="image/x-icon">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>{{file_name}} | Babu Bhai Kundan</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <style> body {{ background-color: #121212; color: #e0e0e0; }} .accordion-button:not(.collapsed) {{ background-color: #343a40; }} .accordion-button:focus {{ box-shadow: none; }} </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{file_name}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <link href="https://unpkg.com/@videojs/themes@1/dist/city/index.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/videojs-seek-buttons/dist/videojs-seek-buttons.css" rel="stylesheet">
+    <style>
+        :root {{ --primary-color: #007bff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c; }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        body {{ background: var(--bg-color); }}
+        .header {{ background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; }}
+        .main-container {{ padding: 15px; max-width: 1200px; margin: 0 auto; }}
+        .player-wrapper {{ background: #000; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000; }}
+        .search-bar input {{ width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px; }}
+        .accordion-item {{ margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
+        .accordion-header {{ width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative; }}
+        .accordion-header:after {{ content: '+'; font-size: 24px; position: absolute; right: 20px; color: #888; transition: transform 0.3s ease; }}
+        .accordion-header.active:after {{ transform: rotate(45deg); }}
+        .accordion-content {{ padding: 0 20px; max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; }}
+        .lecture-entry {{ padding: 15px 0; border-bottom: 1px solid #f0f0f0; }} .lecture-entry:last-child {{ border-bottom: none; }}
+        .lecture-title {{ font-weight: 600; margin-bottom: 12px; color: #333; }}
+        .lecture-links {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+        .list-item {{ display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 20px; text-decoration: none; font-weight: 500; transition: all 0.2s ease; }}
+        .video-item {{ background-color: #e9f5ff; color: #0056b3; border: 1px solid #b3d7ff; }}
+        .video-item.playing, .video-item:hover {{ background-color: #007bff; color: white; border-color: #007bff; transform: translateY(-2px); }}
+        .pdf-item {{ background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3; }}
+        .pdf-item:hover {{ background-color: #ff5722; color: white; border-color: #ff5722; }}
+    </style>
 </head>
-<body class="bg-black">
-    <header><nav class="navbar bg-dark p-lg-3 p-2"><div class="container-fluid"><h4 class="navbar-brand text-light fw-bold">BabuBhaiKundan Player</h4></div></nav></header>
-    <div class="container-fluid mt-3">
-        <h5 class="text-center p-2 flex-wrap">{{file_name}}</h5>
-        <div class="row justify-content-center"><div class="col-lg-10"><video id="player" playsinline controls></video></div></div>
-        <div class="row justify-content-center mt-4"><div class="col-lg-10"><div class="accordion" id="lectureAccordion">{{LECTURE_CONTENT}}</div></div></div>
+<body>
+    <div class="header">{file_name}</div>
+    <div class="main-container">
+        <div class="player-wrapper"><video id="kundan-player" class="video-js vjs-theme-city" controls preload="auto"></video></div>
+        <div class="search-bar"><input type="text" id="searchInput" placeholder="Search for lectures..." onkeyup="filterContent()"></div>
+        <div id="content-container">{content_html}</div>
     </div>
-    <footer class="bg-dark text-center text-white mt-4"><div class="text-center p-3" style="background-color: rgba(0, 0, 0, 0.2);">© <script>document.write(new Date().getFullYear())</script> Copyright: <a class="text-white" href="https://telegram.me/kundan_yadav_bot">𝕂𝕦𝕟𝕕𝕒𝕟 𝕐𝕒𝕕𝕒𝕧 😎</a></div></footer>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    {new_footer}
+
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.0.0/dist/videojs-contrib-quality-levels.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-hls-quality-selector@1.1.4/dist/videojs-hls-quality-selector.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-seek-buttons/dist/videojs-seek-buttons.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {{
-            const player = new Plyr('#player', {{ settings: ['quality', 'speed'], speed: {{ selected: 1, options: [0.5, 1, 1.5, 2] }} }});
-            window.player = player; window.hls = new Hls();
-            const container = player.elements.container; let lastTap = 0;
-            container.addEventListener('touchend', (event) => {{ const now = new Date().getTime(); if ((now - lastTap) < 300) {{ const rect = container.getBoundingClientRect(); const tapX = event.changedTouches[0].clientX - rect.left; player.forward(tapX > rect.width / 2 ? 10 : -10); }} lastTap = now; }});
+        const player = videojs('kundan-player', {{
+            fluid: true,
+            plugins: {{
+                hlsQualitySelector: {{ displayCurrentQuality: true }},
+                seekButtons: {{ forward: 10, back: 10 }}
+            }}
         }});
-        function playVideo(event, url) {{
-            event.preventDefault(); const video = document.getElementById('player');
-            if (url.includes('.m3u8')) {{
-                if (Hls.isSupported()) {{ window.hls.loadSource(url); window.hls.attachMedia(video); window.player.play(); }}
-            }} else {{ video.src = url; window.player.play(); }}
+
+        // YouTube-like Double-tap to seek
+        let lastTap = 0;
+        player.on('touchstart', (event) => {{
+            const now = new Date().getTime();
+            if ((now - lastTap) < 300) {{
+                const rect = player.el().getBoundingClientRect();
+                const tapX = event.touches[0].clientX - rect.left;
+                player.currentTime(player.currentTime() + (tapX > rect.width / 2 ? 10 : -10));
+            }}
+            lastTap = now;
+        }});
+
+        let currentlyPlaying = null;
+        function playVideo(event, url, element) {{
+            event.preventDefault(); // <-- FIXES PAGE JUMPING
+            if (url.toLowerCase().includes('.m3u8')) {{
+                player.src({{ src: url, type: 'application/x-mpegURL' }});
+            }} else {{
+                player.src({{ src: url, type: 'video/mp4' }});
+            }}
+            player.play();
+            if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
+            element.classList.add('playing');
+            currentlyPlaying = element;
+        }}
+
+        // Accordion and Search script
+        document.querySelectorAll('.accordion-header').forEach(btn => btn.addEventListener('click', () => {{
+            btn.classList.toggle('active'); const content = btn.nextElementSibling;
+            content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + 'px';
+        }}));
+
+        function filterContent() {{
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            document.querySelectorAll('.accordion-item').forEach(sub => {{
+                let hasMatch = false;
+                sub.querySelectorAll('.lecture-entry').forEach(lec => {{
+                    const match = lec.querySelector('.lecture-title').textContent.toLowerCase().includes(term);
+                    lec.style.display = match ? '' : 'none'; if(match) hasMatch = true;
+                }});
+                sub.style.display = hasMatch ? '' : 'none';
+            }});
         }}
     </script>
 </body>
-</html>"""
-    
-    final_html = HTML_TEMPLATE.replace("{{file_name}}", file_name)
-    final_html = final_html.replace("{{LECTURE_CONTENT}}", content_html)
-    return final_html
+</html>
+"""
