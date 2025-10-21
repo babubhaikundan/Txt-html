@@ -32,7 +32,6 @@ async def is_subscribed(user_id: int, channel: str) -> bool:
 def get_force_sub_buttons():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📢 Join Update Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")],
-        [InlineKeyboardButton("📷 Follow on Instagram", url="https://instagram.com/babubhaikundan")],
         [InlineKeyboardButton("✅ I've Joined", callback_data="checksub")]
     ])
 
@@ -73,7 +72,7 @@ async def start_command(client, message: Message):
 
     # If subscribed, show welcome message
     await message.reply_photo(
-        photo="https://s.tfrbot.com/h/sRMf7S",
+        photo="https://s.tfrbot.com/h/QCvWqP",
         caption=(
             f"👋 Hello {message.from_user.mention}!\n\n"
             "Welcome to the **TXT → HTML Extractor Bot** 🪄\n"
