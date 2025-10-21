@@ -101,7 +101,7 @@ async def recheck_sub(client, callback_query: CallbackQuery):
 
     await callback_query.answer("✅ Thank you for joining!", show_alert=False)
     await callback_query.message.delete()
-    await client.send_message(callback_query.from_user.id, "Welcome! 🎉\nSend me a file to get started.")
+    await client.send_message(callback_query.from_user.id, "Welcome! 🎉\nSend again /start command to get started.")
 
 
 @bot.on_callback_query(filters.regex("^close_data$"))
