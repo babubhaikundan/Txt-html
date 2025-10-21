@@ -88,6 +88,9 @@ async def kundan_command(client, message: Message):
 #                         MAIN LOGIC: DOCUMENT HANDLER
 #=====================================================================================
 
+
+
+    # Yeh function aapki main.py file mein hai, ise dhoondh kar replace karein
 @bot.on_message(filters.document & filters.private)
 async def handle_document(client, message: Message):
     # 1. Check Force Subscribe
@@ -100,7 +103,7 @@ async def handle_document(client, message: Message):
         return
 
     doc = message.document
-    file_name = doc.file_name
+    file_name_only = os.path.splitext(doc.file_name)[0]
     
     # 3. Show a processing message to the user
     processing_msg = await message.reply_text("`Processing your file, please wait...` ⏳", quote=True)
@@ -108,22 +111,22 @@ async def handle_document(client, message: Message):
     # 4. Process the file
     try:
         # Download the file
-        downloaded_file_path = await message.download(file_name=f"./downloads/{message.id}/{file_name}")
+        downloaded_file_path = await message.download(file_name=f"./downloads/{message.id}/{doc.file_name}")
         
         # Read the file content
         with open(downloaded_file_path, "r", encoding="utf-8") as f:
             file_content = f.read()
 
-        # --- THIS IS THE FIXED LOGIC ---
-        # A. Extract names and URLs
+        # --- THIS IS THE CORRECTED LOGIC FOR main.py ---
+        # A. Extract names and URLs (Function exists now)
         urls = txthtml.extract_names_and_urls(file_content)
         
-        # B. Categorize URLs using the new function (returns a dictionary)
-        categorized_data = txthtml.categorize_urls(urls)
+        # B. Structure data using the new function
+        structured_list = txthtml.structure_data_in_order(urls)
         
         # C. Generate HTML using the new function
-        html_content = txthtml.generate_html(file_name, categorized_data)
-        # --- END OF FIXED LOGIC ---
+        html_content = txthtml.generate_html(file_name_only, structured_list)
+        # --- END OF CORRECTED LOGIC ---
 
         # Save the generated HTML
         html_file_path = downloaded_file_path.rsplit('.', 1)[0] + ".html"
@@ -135,12 +138,10 @@ async def handle_document(client, message: Message):
             document=html_file_path,
             caption=(
                 f"✅ **Conversion Successful!**\n\n"
-                f"File: **`{file_name.replace('.txt', '.html')}`**\n\n"
+                f"File: **`{os.path.basename(html_file_path)}`**\n\n"
                 f"ⓘ *Open this file in a web browser (like Chrome) to view the content.*"
             )
         )
-        
-        # Delete the "Processing" message
         await processing_msg.delete()
 
     except Exception as e:
