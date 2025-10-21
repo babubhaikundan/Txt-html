@@ -90,8 +90,10 @@ async def txt_handler(bot: Client, message: Message):
         f.write(html_content)
 
     # Send HTML back
-    await message.reply_document(document=html_file_path, caption=f"✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞!\n<blockquote><b>`{file_name}`</b></blockquote>\n❖** Open in Chrome.**❖\n\n🌟**Extracted By : <a href="https://t.me/kundan_yadav_bot">{CREDIT}</a>**")
-
+    await message.reply_document(
+    document=html_file_path,
+    caption=f"✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞!\n<blockquote><b>`{file_name}`</b></blockquote>\n❖** Open in Chrome.**❖\n\n📥𝐄𝐱𝐭𝐫𝐚𝐜𝐭𝐞𝐝 𝐁𝐲➤**<a href='https://t.me/kundan_yadav_bot'>{CREDIT}</a>**"
+    )
 
     # Clean up
     try:
