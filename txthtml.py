@@ -47,7 +47,10 @@ def structure_data_in_order(urls):
         subject, title = parse_line(name)
         if subject not in subject_map:
             new_subject = {"name": subject, "lectures": []}
-            subject_map[subject], structured_list.append(new_subject) = new_subject, new_subject
+            # --- THIS IS THE CORRECTED PART ---
+            subject_map[subject] = new_subject
+            structured_list.append(new_subject)
+            # ------------------------------------
         subject_map[subject]["lectures"].append({"title": title, **temp_map[name]})
         processed_names.add(name)
     return structured_list
@@ -128,14 +131,11 @@ def generate_html(file_name, structured_list):
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script><script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {{
-            const video = document.getElementById('player');
-            const player = new Plyr(video, {{
+            const player = new Plyr('#player', {{
                 controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                 settings: ['quality', 'speed'], speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
             }});
-            window.player = player;
-            window.hls = null;
-            // Double-tap to seek
+            window.player = player; window.hls = null;
             const container = player.elements.container; let lastTap = 0;
             container.addEventListener('touchend', (event) => {{
                 const now = new Date().getTime();
@@ -146,57 +146,38 @@ def generate_html(file_name, structured_list):
                 lastTap = now;
             }});
         }});
-        
         let currentlyPlaying = null;
         function playVideo(event, url, element) {{
             event.preventDefault();
             if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
             element.classList.add('playing'); currentlyPlaying = element;
-
-            const video = document.getElementById('player');
-            const player = window.player;
-
+            const video = document.getElementById('player'); const player = window.player;
             if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
                     if (window.hls) window.hls.destroy();
-                    const hls = new Hls();
-                    hls.loadSource(url);
-                    hls.attachMedia(video);
-                    window.hls = hls;
-
-                    // THE MOST IMPORTANT PART - This communicates with the player
+                    const hls = new Hls(); hls.loadSource(url); hls.attachMedia(video); window.hls = hls;
                     hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {{
                         const availableQualities = hls.levels.map((l) => l.height);
                         player.config.quality = {{
-                            default: availableQualities[0],
-                            options: availableQualities,
-                            forced: true,
-                            onChange: (e) => updateQuality(e),
+                            default: availableQualities[0], options: availableQualities,
+                            forced: true, onChange: (e) => updateQuality(e),
                         }};
                     }});
                 }}
-            }} else {{
-                if (window.hls) window.hls.destroy();
-                video.src = url;
-            }}
+            }} else {{ if (window.hls) window.hls.destroy(); video.src = url; }}
             player.play();
         }}
-
         function updateQuality(newQuality) {{
             if (window.hls) {{
                 window.hls.levels.forEach((level, levelIndex) => {{
-                    if (level.height === newQuality) {{
-                        window.hls.currentLevel = levelIndex;
-                    }}
+                    if (level.height === newQuality) {{ window.hls.currentLevel = levelIndex; }}
                 }});
             }}
         }}
-
         document.querySelectorAll('.accordion-header').forEach(btn => btn.addEventListener('click', () => {{
             btn.classList.toggle('active'); const content = btn.nextElementSibling;
             content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + 'px';
         }}));
-
         function filterContent() {{
             const term = document.getElementById('searchInput').value.toLowerCase();
             document.querySelectorAll('.accordion-item').forEach(sub => {{
