@@ -23,12 +23,16 @@ def parse_line(name):
     match = re.search(r'^\((.*?)\)', name)
     if match:
         return match.group(1).strip(), name.replace(match.group(0), '').strip().lstrip('|| ').strip()
+    
     match = re.search(r'^(.*? (?:by|By) (?:Sir|Mam))\s*\|\|\s*(.*)', name)
     if match:
-        return match.group(1).strip(), match.group(2].strip()
+        # --- THIS WAS THE LINE WITH THE ERROR ---
+        return match.group(1).strip(), match.group(2).strip() # Corrected from group(2]
+    
     if '||' in name:
         parts = name.split('||', 1)
         return parts[0].strip(), parts[1].strip()
+        
     return "Miscellaneous", name
 
 def structure_data_in_order(urls):
@@ -131,7 +135,7 @@ def generate_html(file_name, structured_list):
         document.addEventListener('DOMContentLoaded', () => {{
             const player = new Plyr('#player', {{
                 controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
-                settings: ['quality', 'speed'], speed: {{selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2]}},
+                settings: ['quality', 'speed'], speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
             }});
             window.player = player; window.hls = null;
             const container = player.elements.container; let lastTap = 0;
