@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with the corrected Plyr.js and HLS integration with Quality Switching.
+    Generates the final HTML with proper HLS quality switching that actually works!
     """
     content_html = ""
     if not structured_list:
@@ -119,6 +119,7 @@ def generate_html(file_name, structured_list):
         .video-item.playing, .video-item:hover {{background-color: #007bff; color: white; border-color: #007bff; transform: translateY(-2px);}}
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
+        .plyr--volume {{display: none !important;}}
     </style>
 </head>
 <body>
@@ -129,95 +130,159 @@ def generate_html(file_name, structured_list):
         <div id="content-container">{content_html}</div>
     </div>
     {new_footer}
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script><script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
+        let player, hls;
+        
         document.addEventListener('DOMContentLoaded', () => {{
-            const player = new Plyr('#player', {{
-                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'pip', 'fullscreen'],
-                settings: ['quality', 'speed'], 
+            const video = document.getElementById('player');
+            
+            // Initialize Plyr WITHOUT quality options first
+            player = new Plyr(video, {{
+                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
+                settings: ['quality', 'speed'],
                 speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
-                quality: {{default: 720, options: [360, 480, 720, 1080]}}
+                quality: {{
+                    default: 576,
+                    options: [360, 480, 576, 720]
+                }}
             }});
-            window.player = player; window.hls = null;
-            const container = player.elements.container; let lastTap = 0;
+            
+            // Double tap to seek
+            const container = player.elements.container;
+            let lastTap = 0;
             container.addEventListener('touchend', (event) => {{
                 const now = new Date().getTime();
                 if ((now - lastTap) < 300) {{
-                    const rect = container.getBoundingClientRect(); const tapX = event.changedTouches[0].clientX - rect.left;
+                    const rect = container.getBoundingClientRect();
+                    const tapX = event.changedTouches[0].clientX - rect.left;
                     player.forward(tapX > rect.width / 2 ? 10 : -10);
                 }}
                 lastTap = now;
             }});
         }});
+        
         let currentlyPlaying = null;
+        
         function playVideo(event, url, element) {{
             event.preventDefault();
+            
             if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
-            element.classList.add('playing'); currentlyPlaying = element;
-            const video = document.getElementById('player'); const player = window.player;
+            element.classList.add('playing');
+            currentlyPlaying = element;
+            
+            const video = document.getElementById('player');
+            
             if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
-                    if (window.hls) window.hls.destroy();
-                    const hls = new Hls({{enableWorker: true, lowLatencyMode: true}}); 
-                    hls.loadSource(url); 
-                    hls.attachMedia(video); 
-                    window.hls = hls;
-                    
-                    hls.on(Hls.Events.MANIFEST_PARSED, function () {{
-                        const availableQualities = hls.levels.map((l) => l.height);
-                        availableQualities.unshift(0); // Add "Auto" option
-                        
-                        // Update Plyr quality options
-                        player.quality = availableQualities[0];
-                        
-                        // Dynamically update Plyr settings
-                        const defaultOptions = player.config.controls;
-                        player.config.quality = {{
-                            default: 0,
-                            options: availableQualities,
-                            forced: true,
-                            onChange: (quality) => updateQuality(quality)
-                        }};
-                        
-                        // Force Plyr to rebuild settings menu
-                        player.config = player.config;
-                    }});
-                    
-                    hls.on(Hls.Events.ERROR, function (event, data) {{
-                        console.error('HLS Error:', data);
-                    }});
-                }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
-                    video.src = url; // Safari native HLS support
-                }}
-            }} else {{ if (window.hls) window.hls.destroy(); video.src = url; }}
-            player.play();
-        }}
-        function updateQuality(newQuality) {{
-            if (!window.hls) return;
-            
-            // If user selects "Auto" (0)
-            if (newQuality === 0) {{
-                window.hls.currentLevel = -1; // -1 means auto quality
-            }} else {{
-                // Find the level with matching height
-                window.hls.levels.forEach((level, levelIndex) => {{
-                    if (level.height === newQuality) {{
-                        window.hls.currentLevel = levelIndex;
+                    // Destroy previous HLS instance
+                    if (hls) {{
+                        hls.destroy();
                     }}
-                }});
+                    
+                    // Create new HLS instance
+                    hls = new Hls({{
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 90
+                    }});
+                    
+                    hls.loadSource(url);
+                    hls.attachMedia(video);
+                    
+                    // When manifest is parsed, update quality options
+                    hls.on(Hls.Events.MANIFEST_PARSED, function () {{
+                        // Get available quality levels
+                        const availableQualities = hls.levels.map((l) => l.height);
+                        
+                        console.log('Available qualities:', availableQualities);
+                        
+                        // CRITICAL: Destroy and recreate Plyr with new quality options
+                        player.destroy();
+                        
+                        player = new Plyr(video, {{
+                            controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
+                            settings: ['quality', 'speed'],
+                            speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
+                            quality: {{
+                                default: availableQualities[0],
+                                options: availableQualities,
+                                forced: true,
+                                onChange: (quality) => updateQuality(quality)
+                            }}
+                        }});
+                        
+                        // Start playing
+                        player.play();
+                    }});
+                    
+                    // Error handling
+                    hls.on(Hls.Events.ERROR, function (event, data) {{
+                        if (data.fatal) {{
+                            console.error('Fatal HLS error:', data);
+                            switch(data.type) {{
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    hls.startLoad();
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    hls.recoverMediaError();
+                                    break;
+                                default:
+                                    hls.destroy();
+                                    break;
+                            }}
+                        }}
+                    }});
+                    
+                }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
+                    // Safari native HLS support
+                    video.src = url;
+                    player.play();
+                }}
+            }} else {{
+                // Regular MP4 video
+                if (hls) {{
+                    hls.destroy();
+                    hls = null;
+                }}
+                video.src = url;
+                player.play();
             }}
         }}
-        document.querySelectorAll('.accordion-header').forEach(btn => btn.addEventListener('click', () => {{
-            btn.classList.toggle('active'); const content = btn.nextElementSibling;
-            content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + 'px';
-        }}));
+        
+        function updateQuality(newQuality) {{
+            if (!hls) return;
+            
+            console.log('Switching to quality:', newQuality);
+            
+            // Find the level index for the selected quality
+            hls.levels.forEach((level, levelIndex) => {{
+                if (level.height === newQuality) {{
+                    console.log('Setting quality to level', levelIndex, ':', level.height + 'p');
+                    hls.currentLevel = levelIndex;
+                }}
+            }});
+        }}
+        
+        // Accordion functionality
+        document.querySelectorAll('.accordion-header').forEach(btn => {{
+            btn.addEventListener('click', () => {{
+                btn.classList.toggle('active');
+                const content = btn.nextElementSibling;
+                content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + 'px';
+            }});
+        }});
+        
+        // Search functionality
         function filterContent() {{
             const term = document.getElementById('searchInput').value.toLowerCase();
             document.querySelectorAll('.accordion-item').forEach(sub => {{
                 let hasMatch = false;
                 sub.querySelectorAll('.lecture-entry').forEach(lec => {{
                     const match = lec.querySelector('.lecture-title').textContent.toLowerCase().includes(term);
-                    lec.style.display = match ? '' : 'none'; if(match) hasMatch = true;
+                    lec.style.display = match ? '' : 'none';
+                    if(match) hasMatch = true;
                 }});
                 sub.style.display = hasMatch ? '' : 'none';
             }});
