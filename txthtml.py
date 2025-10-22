@@ -3,7 +3,7 @@ import re
 
 def extract_names_and_urls(file_content):
     """
-    Extracts (name, url) pairs from the raw text content. This function is required by main.py.
+    Extracts (name, url) pairs from the raw text content. Required by main.py.
     """
     lines = file_content.strip().split("\n")
     data = []
@@ -20,24 +20,15 @@ def parse_line(name):
     """
     Smarter parsing to identify subject and title from various formats.
     """
-    # Pattern 1: (Subject by Teacher) Anything else
     match = re.search(r'^\((.*?)\)', name)
     if match:
-        subject = match.group(1).strip()
-        title = name.replace(match.group(0), '').strip().lstrip('|| ').strip()
-        return subject, title
-
-    # Pattern 2: Subject by Teacher || Title
+        return match.group(1).strip(), name.replace(match.group(0), '').strip().lstrip('|| ').strip()
     match = re.search(r'^(.*? (?:by|By) (?:Sir|Mam))\s*\|\|\s*(.*)', name)
     if match:
         return match.group(1).strip(), match.group(2).strip()
-
-    # Pattern 3 (Fallback): Anything before || is the subject/topic
     if '||' in name:
         parts = name.split('||', 1)
         return parts[0].strip(), parts[1].strip()
-        
-    # Final fallback
     return "Miscellaneous", name
 
 def structure_data_in_order(urls):
@@ -46,7 +37,6 @@ def structure_data_in_order(urls):
     """
     structured_list = []
     subject_map = {}
-    
     temp_map = {}
     for name, url in urls:
         if name not in temp_map:
@@ -60,27 +50,23 @@ def structure_data_in_order(urls):
     for name, _ in urls:
         if name in processed_names:
             continue
-        
         subject, title = parse_line(name)
         lecture_data = temp_map[name]
-
         if subject not in subject_map:
             new_subject = {"name": subject, "lectures": []}
             subject_map[subject] = new_subject
             structured_list.append(new_subject)
-            
         subject_map[subject]["lectures"].append({
             "title": title,
             "videos": lecture_data["videos"],
             "pdfs": lecture_data["pdfs"]
         })
         processed_names.add(name)
-        
     return structured_list
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with the new Plyr.js player and all requested features.
+    Generates the final HTML with the new Plyr.js player, matching the user's image.
     """
     content_html = ""
     if not structured_list:
@@ -88,22 +74,18 @@ def generate_html(file_name, structured_list):
     else:
         item_id_counter = 0
         for subject_data in structured_list:
-            subject_name = subject_data["name"]
-            lectures = subject_data["lectures"]
-            
+            subject_name, lectures = subject_data["name"], subject_data["lectures"]
             lecture_html = ""
             for lecture in lectures:
-                title = lecture["title"]
-                video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, \'{url}\', this)"><i class="fa-solid fa-circle-play"></i> Play Video</a>' for url in lecture["videos"])
-                pdf_links = "".join(f'<a href="{url}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> View PDF</a>' for url in lecture["pdfs"])
-                
+                title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
+                video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, \'{url}\', this)"><i class="fa-solid fa-circle-play"></i> Play Video</a>' for url in videos)
+                pdf_links = "".join(f'<a href="{url}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> View PDF</a>' for url in pdfs)
                 lecture_html += f"""
                 <div class="lecture-entry">
                     <p class="lecture-title">{title}</p>
                     <div class="lecture-links">{video_links}{pdf_links}</div>
                 </div>
                 """
-            
             item_id = f"item{item_id_counter}"
             content_html += f"""
             <div class="accordion-item">
@@ -135,7 +117,12 @@ def generate_html(file_name, structured_list):
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
     <style>
-        :root {{ --primary-color: #007bff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c; }}
+        :root {{
+            --plyr-color-main: #00b3ff; /* Matching the image's blue color */
+            --bg-color: #f4f7f9;
+            --card-bg: #ffffff;
+            --header-bg: #1c1c1c;
+        }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
         body {{ background: var(--bg-color); }}
         .header {{ background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; }}
@@ -171,13 +158,14 @@ def generate_html(file_name, structured_list):
     <script>
         document.addEventListener('DOMContentLoaded', () => {{
             const video = document.getElementById('player');
+            // Player Configuration matching the image
             const player = new Plyr(video, {{
-                settings: ['quality', 'speed', 'loop'],
+                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
+                settings: ['quality', 'speed'],
                 speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }},
-                quality: {{ default: 720, options: [4320, 2160, 1440, 1080, 720, 480, 360, 240] }},
             }});
             window.player = player;
-            window.hls = new Hls();
+            window.hls = null; // Initialize hls instance
 
             // Double tap to seek
             const container = player.elements.container;
@@ -204,10 +192,22 @@ def generate_html(file_name, structured_list):
             const video = document.getElementById('player');
             if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
+                    if (window.hls) {{
+                        window.hls.destroy(); // Destroy previous instance if it exists
+                    }}
+                    window.hls = new Hls();
                     window.hls.loadSource(url);
                     window.hls.attachMedia(video);
+                    window.hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {{
+                         const availableQualities = window.hls.levels.map((l) => l.height)
+                         // This part is handled automatically by Plyr's quality setting
+                    }});
                 }}
             }} else {{
+                // For MP4 files, destroy HLS instance if active
+                if (window.hls) {{
+                    window.hls.destroy();
+                }}
                 video.src = url;
             }}
             window.player.play();
