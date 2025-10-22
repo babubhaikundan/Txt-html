@@ -169,6 +169,13 @@ def generate_html(file_name, structured_list):
         .plyr--full-ui input[type=range] {{ color: #007bff; }}
         .plyr__menu__container {{ background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); }}
         
+        /* Custom Quality Selector */
+        .hls-quality-selector {{ position: absolute; bottom: 55px; right: 10px; background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); border-radius: 8px; padding: 8px 0; z-index: 10; display: none; }}
+        .hls-quality-selector button {{ display: block; width: 100%; padding: 8px 16px; background: none; border: none; color: white; text-align: left; cursor: pointer; transition: background 0.2s; }}
+        .hls-quality-selector button:hover {{ background: rgba(255, 255, 255, 0.1); }}
+        .hls-quality-selector button.active {{ background: rgba(0, 123, 255, 0.5); }}
+        .hls-quality-button {{ position: absolute; bottom: 55px; right: 10px; background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); border-radius: 8px; padding: 8px 12px; color: white; cursor: pointer; z-index: 10; display: none; }}
+        
         /* Network Status Indicator */
         .network-indicator {{ position: absolute; top: 10px; right: 10px; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }}
         .network-indicator.good {{ background: rgba(0, 128, 0, 0.7); }}
@@ -192,6 +199,8 @@ def generate_html(file_name, structured_list):
             <div class="network-indicator" id="networkIndicator">Checking connection...</div>
             <div class="video-type-indicator" id="videoTypeIndicator" style="display: none;">Video Type</div>
             <div class="custom-loading" id="customLoading"></div>
+            <div class="hls-quality-button" id="hlsQualityButton">Quality</div>
+            <div class="hls-quality-selector" id="hlsQualitySelector"></div>
             <video id="player" class="player" playsinline controls></video>
         </div>
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search for lectures..." onkeyup="filterContent()"></div>
@@ -275,24 +284,23 @@ def generate_html(file_name, structured_list):
                 'current-time',
                 'duration',
                 'mute',
-                'settings',
                 'pip',
                 'fullscreen'
             ],
-            quality: {{
-                default: 720,
-                options: [1080, 720, 480, 360, 240],
-                forced: true,
-            }},
             dblclickFullscreen: false,
         }});
         
         // Store player in window object for global access
         window.player = player;
         
+        // HLS.js instance
+        let hlsInstance = null;
+        
         // Custom loading indicator
         const customLoading = document.getElementById('customLoading');
         const videoTypeIndicator = document.getElementById('videoTypeIndicator');
+        const hlsQualityButton = document.getElementById('hlsQualityButton');
+        const hlsQualitySelector = document.getElementById('hlsQualitySelector');
         
         player.on('ready', (event) => {{
             const instance = event.detail.plyr;
@@ -352,14 +360,77 @@ def generate_html(file_name, structured_list):
             customLoading.style.display = 'none';
         }});
         
-        // Auto quality selection based on network
-        player.on('ready', () => {{
+        // HLS Quality Selector
+        function setupHlsQualitySelector(hls) {{
+            // Clear existing options
+            hlsQualitySelector.innerHTML = '';
+            
+            // Add quality options
+            for (let i = 0; i < hls.levels.length; i++) {{
+                const level = hls.levels[i];
+                const height = level.height;
+                const bitrate = Math.round(level.bitrate / 1000);
+                
+                const button = document.createElement('button');
+                button.textContent = `${{height}}p (${{bitrate}} kbps)`;
+                button.dataset.level = i;
+                
+                button.addEventListener('click', () => {{
+                    hls.currentLevel = parseInt(button.dataset.level);
+                    updateQualityButtons(hls);
+                }});
+                
+                hlsQualitySelector.appendChild(button);
+            }}
+            
+            // Add Auto option
+            const autoButton = document.createElement('button');
+            autoButton.textContent = 'Auto';
+            autoButton.dataset.level = -1;
+            
+            autoButton.addEventListener('click', () => {{
+                hls.currentLevel = -1;
+                updateQualityButtons(hls);
+            }});
+            
+            hlsQualitySelector.appendChild(autoButton);
+            
+            // Show quality button
+            hlsQualityButton.style.display = 'block';
+            
+            // Set initial quality based on network
             if (networkQuality === 'good') {{
-                player.quality = 1080;
+                hls.currentLevel = hls.levels.length - 1; // Highest quality
             }} else if (networkQuality === 'medium') {{
-                player.quality = 720;
+                hls.currentLevel = Math.floor(hls.levels.length / 2); // Medium quality
             }} else {{
-                player.quality = 480;
+                hls.currentLevel = 0; // Lowest quality
+            }}
+            
+            updateQualityButtons(hls);
+        }}
+        
+        function updateQualityButtons(hls) {{
+            const buttons = hlsQualitySelector.querySelectorAll('button');
+            buttons.forEach(button => {{
+                const level = parseInt(button.dataset.level);
+                if (level === hls.currentLevel) {{
+                    button.classList.add('active');
+                }} else {{
+                    button.classList.remove('active');
+                }}
+            }});
+        }}
+        
+        // Toggle quality selector
+        hlsQualityButton.addEventListener('click', () => {{
+            hlsQualitySelector.style.display = hlsQualitySelector.style.display === 'block' ? 'none' : 'block';
+        }});
+        
+        // Hide quality selector when clicking outside
+        document.addEventListener('click', (e) => {{
+            if (!hlsQualityButton.contains(e.target) && !hlsQualitySelector.contains(e.target)) {{
+                hlsQualitySelector.style.display = 'none';
             }}
         }});
         
@@ -391,41 +462,48 @@ def generate_html(file_name, structured_list):
                 videoTypeIndicator.style.display = 'none';
             }}, 3000);
             
+            // Hide quality selector for MP4 videos
+            hlsQualityButton.style.display = 'none';
+            hlsQualitySelector.style.display = 'none';
+            
             if (isHls) {{
                 // Handle HLS streams
                 if (Hls.isSupported()) {{
-                    const hls = new Hls();
-                    hls.loadSource(url);
-                    hls.attachMedia(player.media);
+                    // Destroy previous HLS instance if exists
+                    if (hlsInstance) {{
+                        hlsInstance.destroy();
+                    }}
                     
-                    // Auto-select quality based on network
-                    hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {{
-                        if (networkQuality === 'good') {{
-                            // Select highest quality
-                            hls.currentLevel = hls.levels.length - 1;
-                        }} else if (networkQuality === 'medium') {{
-                            // Select medium quality
-                            hls.currentLevel = Math.floor(hls.levels.length / 2);
-                        }} else {{
-                            // Select lowest quality
-                            hls.currentLevel = 0;
-                        }}
+                    // Create new HLS instance
+                    hlsInstance = new Hls({{
+                        debug: false,
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 90
                     }});
                     
-                    hls.on(Hls.Events.ERROR, function(event, data) {{
+                    hlsInstance.loadSource(url);
+                    hlsInstance.attachMedia(player.media);
+                    
+                    // Setup quality selector when manifest is parsed
+                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, function(event, data) {{
+                        setupHlsQualitySelector(hlsInstance);
+                    }});
+                    
+                    hlsInstance.on(Hls.Events.ERROR, function(event, data) {{
                         if (data.fatal) {{
                             switch(data.type) {{
                                 case Hls.ErrorTypes.NETWORK_ERROR:
                                     // Try to recover network error
-                                    hls.startLoad();
+                                    hlsInstance.startLoad();
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
                                     // Try to recover media error
-                                    hls.recoverMediaError();
+                                    hlsInstance.recoverMediaError();
                                     break;
                                 default:
                                     // Cannot recover
-                                    hls.destroy();
+                                    hlsInstance.destroy();
                                     break;
                             }}
                         }}
@@ -459,7 +537,7 @@ def generate_html(file_name, structured_list):
                 
                 // Auto-select quality based on network
                 if (networkQuality === 'good') {{
-                    player.quality = 1080;
+                    player.quality = 240p;
                 }} else if (networkQuality === 'medium') {{
                     player.quality = 720;
                 }} else {{
