@@ -135,10 +135,10 @@ def generate_html(file_name, structured_list):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{file_name}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
-    <link href="https://unpkg.com/@videojs/themes@1/dist/city/index.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/videojs-seek-buttons/dist/videojs-seek-buttons.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/videojs-overlay/dist/videojs-overlay.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {{ --primary-color: #007bff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c; }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
@@ -161,23 +161,13 @@ def generate_html(file_name, structured_list):
         .pdf-item {{ background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3; }}
         .pdf-item:hover {{ background-color: #ff5722; color: white; border-color: #ff5722; }}
         
-        /* Enhanced Video Player Styles */
-        .video-js {{ width: 100%; height: 0; padding-top: 56.25%; /* 16:9 Aspect Ratio */ }}
-        .video-js .vjs-big-play-button {{ font-size: 3em; line-height: 1.5; height: 1.5em; width: 3em; border-radius: 0.3em; background-color: rgba(0, 0, 0, 0.45); border: 0.15em solid rgba(255, 255, 255, 0.3); }}
-        .video-js .vjs-control-bar {{ background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }}
-        .video-js .vjs-slider {{ background-color: rgba(255, 255, 255, 0.3); }}
-        .video-js .vjs-play-progress, .video-js .vjs-volume-level {{ background-color: #007bff; }}
-        .video-js .vjs-progress-holder:hover .vjs-play-progress {{ background-color: #0056b3; }}
-        
-        /* Quality Selector Custom Styles */
-        .vjs-quality-selector {{ position: relative; }}
-        .vjs-quality-selector .vjs-menu {{ left: -4em; }}
-        
-        /* Speed Control Custom Styles */
-        .vjs-playback-rate .vjs-menu {{ left: -2em; }}
-        
-        /* Picture in Picture Button */
-        .vjs-pip-button {{ cursor: pointer; }}
+        /* Plyr.js Custom Styles */
+        .plyr {{ border-radius: 8px; overflow: hidden; }}
+        .plyr__video-wrapper {{ background: #000; }}
+        .plyr__control--overlaid {{ background: rgba(0, 0, 0, 0.7); }}
+        .plyr__progress__buffer {{ color: rgba(255, 255, 255, 0.25); }}
+        .plyr--full-ui input[type=range] {{ color: #007bff; }}
+        .plyr__menu__container {{ background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); }}
         
         /* Network Status Indicator */
         .network-indicator {{ position: absolute; top: 10px; right: 10px; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }}
@@ -185,11 +175,7 @@ def generate_html(file_name, structured_list):
         .network-indicator.medium {{ background: rgba(255, 165, 0, 0.7); }}
         .network-indicator.poor {{ background: rgba(255, 0, 0, 0.7); }}
         
-        /* Buffering Indicator */
-        .buffering-indicator {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 16px; z-index: 10; display: none; }}
-        
         /* Loading Animation */
-        .vjs-loading-spinner {{ display: none; }}
         .custom-loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; border: 5px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #007bff; animation: spin 1s ease-in-out infinite; z-index: 10; display: none; }}
         @keyframes spin {{ to {{ transform: translate(-50%, -50%) rotate(360deg); }} }}
     </style>
@@ -199,27 +185,20 @@ def generate_html(file_name, structured_list):
     <div class="main-container">
         <div class="player-wrapper">
             <div class="network-indicator" id="networkIndicator">Checking connection...</div>
-            <div class="buffering-indicator" id="bufferingIndicator">Buffering...</div>
             <div class="custom-loading" id="customLoading"></div>
-            <video id="kundan-player" class="video-js vjs-theme-city" controls preload="auto" data-setup='{{}}'>
-                <p class="vjs-no-js">
-                    To view this video please enable JavaScript, and consider upgrading to a web browser that
-                    <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>.
-                </p>
-            </video>
+            <video id="player" class="player" playsinline controls></video>
         </div>
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search for lectures..." onkeyup="filterContent()"></div>
         <div id="content-container">{content_html}</div>
     </div>
     {new_footer}
 
-    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.0.0/dist/videojs-contrib-quality-levels.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-hls-quality-selector@1.1.4/dist/videojs-hls-quality-selector.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-seek-buttons/dist/videojs-seek-buttons.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-overlay/dist/videojs-overlay.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-pip-button/dist/videojs-pip-button.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script>
+        // Initialize WOW library for animations
+        new WOW().init();
+        
         // Network Quality Detection
         let networkQuality = 'good';
         let connectionSpeed = 0;
@@ -280,152 +259,105 @@ def generate_html(file_name, structured_list):
         // Initialize network quality detection
         detectNetworkQuality();
         
-        // Player initialization
-        const player = videojs('kundan-player', {{
-            fluid: true,
-            html5: {{
-                hls: {{
-                    enableLowInitialPlaylist: true,
-                    smoothQualityChange: true,
-                    overrideNative: true
-                }}
+        // Player initialization with Plyr.js
+        const player = new Plyr('#player', {{
+            controls: [
+                'play-large',
+                'play',
+                'progress',
+                'current-time',
+                'duration',
+                'mute',
+                'settings',
+                'pip',
+                'fullscreen'
+            ],
+            quality: {{
+                default: 720,
+                options: [1080, 720, 480, 360, 240],
+                forced: true,
             }},
-            plugins: {{
-                hlsQualitySelector: {{
-                    displayCurrentQuality: true,
-                    default: 'auto' // Default to auto quality
-                }},
-                seekButtons: {{
-                    forward: 10,
-                    back: 10
-                }},
-                pipButton: {{}}
-            }}
+            dblclickFullscreen: false,
         }});
+        
+        // Store player in window object for global access
+        window.player = player;
         
         // Custom loading indicator
         const customLoading = document.getElementById('customLoading');
-        const bufferingIndicator = document.getElementById('bufferingIndicator');
         
-        player.on('loadstart', function() {{
+        player.on('ready', (event) => {{
+            const instance = event.detail.plyr;
+            const container = instance.elements.container;
+            let lastTap = 0;
+            let isSeeking = false;
+            
+            // Double-tap to seek functionality
+            container.addEventListener('touchend', event => {{
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTap;
+                
+                if (tapLength < 300 && tapLength > 0 && !isSeeking) {{
+                    isSeeking = true;
+                    event.preventDefault();
+                    
+                    const containerRect = container.getBoundingClientRect();
+                    const touchX = event.changedTouches[0].clientX;
+                    const midpoint = containerRect.left + (containerRect.width / 2);
+                    
+                    if (touchX < midpoint) {{
+                        instance.rewind(7);
+                    }} else {{
+                        instance.forward(7);
+                    }}
+                    
+                    setTimeout(() => {{ isSeeking = false; }}, 300);
+                }}
+                lastTap = currentTime;
+            }});
+            
+            // Auto-rotate to landscape when entering fullscreen
+            instance.on('enterfullscreen', () => {{
+                try {{
+                    if (screen.orientation && typeof screen.orientation.lock === 'function') {{
+                        screen.orientation.lock('landscape');
+                    }}
+                }} catch (e) {{ /* Ignore errors */ }}
+            }});
+            
+            // Unlock screen orientation when exiting fullscreen
+            instance.on('exitfullscreen', () => {{
+                try {{
+                    if (screen.orientation && typeof screen.orientation.unlock === 'function') {{
+                        screen.orientation.unlock();
+                    }}
+                }} catch (e) {{ /* Ignore errors */ }}
+            }});
+        }});
+        
+        // Show loading indicator when loading video
+        player.on('waiting', () => {{
             customLoading.style.display = 'block';
         }});
         
-        player.on('canplay', function() {{
+        player.on('playing', () => {{
             customLoading.style.display = 'none';
         }});
         
-        player.on('waiting', function() {{
-            bufferingIndicator.style.display = 'block';
-        }});
-        
-        player.on('playing', function() {{
-            bufferingIndicator.style.display = 'none';
-        }});
-        
         // Auto quality selection based on network
-        player.on('loadedmetadata', function() {{
-            if (player.hlsQualitySelector) {{
-                const qualityLevels = player.qualityLevels();
-                if (qualityLevels && qualityLevels.length > 0) {{
-                    // Auto-select quality based on network
-                    if (networkQuality === 'good') {{
-                        // Select highest quality
-                        for (let i = qualityLevels.length - 1; i >= 0; i--) {{
-                            if (qualityLevels[i].enabled) {{
-                                qualityLevels[i].enabled = true;
-                                for (let j = 0; j < qualityLevels.length; j++) {{
-                                    if (i !== j) qualityLevels[j].enabled = false;
-                                }}
-                                break;
-                            }}
-                        }}
-                    }} else if (networkQuality === 'medium') {{
-                        // Select medium quality
-                        const midIndex = Math.floor(qualityLevels.length / 2);
-                        for (let i = 0; i < qualityLevels.length; i++) {{
-                            qualityLevels[i].enabled = (i === midIndex);
-                        }}
-                    }} else {{
-                        // Select lowest quality
-                        for (let i = 0; i < qualityLevels.length; i++) {{
-                            qualityLevels[i].enabled = (i === 0);
-                        }}
-                    }}
-                }}
+        player.on('ready', () => {{
+            if (networkQuality === 'good') {{
+                player.quality = 1080;
+            }} else if (networkQuality === 'medium') {{
+                player.quality = 720;
+            }} else {{
+                player.quality = 480;
             }}
-        }});
-        
-        // YouTube-like Double-tap to seek
-        let lastTap = 0;
-        player.on('touchstart', (event) => {{
-            const now = new Date().getTime();
-            if ((now - lastTap) < 300) {{
-                const rect = player.el().getBoundingClientRect();
-                const tapX = event.touches[0].clientX - rect.left;
-                player.currentTime(player.currentTime() + (tapX > rect.width / 2 ? 10 : -10));
-            }}
-            lastTap = now;
-        }});
-        
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {{
-            if (player.el().contains(document.activeElement) || document.activeElement === document.body) {{
-                switch(e.key) {{
-                    case ' ':
-                        e.preventDefault();
-                        if (player.paused()) {{
-                            player.play();
-                        }} else {{
-                            player.pause();
-                        }}
-                        break;
-                    case 'ArrowRight':
-                        player.currentTime(player.currentTime() + 5);
-                        break;
-                    case 'ArrowLeft':
-                        player.currentTime(player.currentTime() - 5);
-                        break;
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        player.volume(Math.min(player.volume() + 0.1, 1));
-                        break;
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        player.volume(Math.max(player.volume() - 0.1, 0));
-                        break;
-                    case 'f':
-                        if (player.isFullscreen()) {{
-                            player.exitFullscreen();
-                        }} else {{
-                            player.requestFullscreen();
-                        }}
-                        break;
-                    case 'm':
-                        player.muted(!player.muted());
-                        break;
-                }}
-            }}
-        }});
-        
-        // Quality change notification
-        player.on('hlsQualitySelector-qualityChange', function(event, quality) {{
-            player.ready(function() {{
-                player.overlay({{
-                    content: `Quality: ${{quality.label}}`,
-                    align: 'top-right',
-                    showBackground: true
-                }});
-                
-                setTimeout(() => {{
-                    player.overlay();
-                }}, 2000);
-            }});
         }});
         
         let currentlyPlaying = null;
         function playVideo(event, url, element) {{
-            event.preventDefault(); // <-- FIXES PAGE JUMPING
+            event.preventDefault();
             
             // Show loading indicator
             customLoading.style.display = 'block';
@@ -433,18 +365,34 @@ def generate_html(file_name, structured_list):
             // Detect network quality before playing
             detectNetworkQuality();
             
-            if (url.toLowerCase().includes('.m3u8')) {{
-                player.src({{ src: url, type: 'application/x-mpegURL' }});
+            // Set video source
+            player.source = {{
+                type: 'video',
+                sources: [
+                    {{ src: url, type: 'video/mp4', size: 1080 }},
+                    {{ src: url, type: 'video/mp4', size: 720 }},
+                    {{ src: url, type: 'video/mp4', size: 480 }},
+                    {{ src: url, type: 'video/mp4', size: 360 }},
+                    {{ src: url, type: 'video/mp4', size: 240 }},
+                ]
+            }};
+            
+            // Auto-select quality based on network
+            if (networkQuality === 'good') {{
+                player.quality = 1080;
+            }} else if (networkQuality === 'medium') {{
+                player.quality = 720;
             }} else {{
-                player.src({{ src: url, type: 'video/mp4' }});
+                player.quality = 480;
             }}
             
-            player.ready(function() {{
-                player.play();
-                if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
-                element.classList.add('playing');
-                currentlyPlaying = element;
-            }});
+            // Play the video
+            player.play();
+            
+            // Update the playing indicator
+            if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
+            element.classList.add('playing');
+            currentlyPlaying = element;
         }}
 
         // Accordion and Search script
