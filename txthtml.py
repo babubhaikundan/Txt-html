@@ -26,8 +26,7 @@ def parse_line(name):
     
     match = re.search(r'^(.*? (?:by|By) (?:Sir|Mam))\s*\|\|\s*(.*)', name)
     if match:
-        # --- THIS WAS THE LINE WITH THE ERROR ---
-        return match.group(1).strip(), match.group(2).strip() # Corrected from group(2]
+        return match.group(1).strip(), match.group(2).strip()
     
     if '||' in name:
         parts = name.split('||', 1)
@@ -59,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with the corrected Plyr.js and HLS integration.
+    Generates the final HTML with the corrected Plyr.js and HLS integration with Quality Switching.
     """
     content_html = ""
     if not structured_list:
@@ -134,8 +133,10 @@ def generate_html(file_name, structured_list):
     <script>
         document.addEventListener('DOMContentLoaded', () => {{
             const player = new Plyr('#player', {{
-                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
-                settings: ['quality', 'speed'], speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
+                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'pip', 'fullscreen'],
+                settings: ['quality', 'speed'], 
+                speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
+                quality: {{default: 720, options: [360, 480, 720, 1080]}}
             }});
             window.player = player; window.hls = null;
             const container = player.elements.container; let lastTap = 0;
@@ -157,22 +158,52 @@ def generate_html(file_name, structured_list):
             if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
                     if (window.hls) window.hls.destroy();
-                    const hls = new Hls(); hls.loadSource(url); hls.attachMedia(video); window.hls = hls;
-                    hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {{
+                    const hls = new Hls({{enableWorker: true, lowLatencyMode: true}}); 
+                    hls.loadSource(url); 
+                    hls.attachMedia(video); 
+                    window.hls = hls;
+                    
+                    hls.on(Hls.Events.MANIFEST_PARSED, function () {{
                         const availableQualities = hls.levels.map((l) => l.height);
+                        availableQualities.unshift(0); // Add "Auto" option
+                        
+                        // Update Plyr quality options
+                        player.quality = availableQualities[0];
+                        
+                        // Dynamically update Plyr settings
+                        const defaultOptions = player.config.controls;
                         player.config.quality = {{
-                            default: availableQualities[0], options: availableQualities,
-                            forced: true, onChange: (e) => updateQuality(e),
+                            default: 0,
+                            options: availableQualities,
+                            forced: true,
+                            onChange: (quality) => updateQuality(quality)
                         }};
+                        
+                        // Force Plyr to rebuild settings menu
+                        player.config = player.config;
                     }});
+                    
+                    hls.on(Hls.Events.ERROR, function (event, data) {{
+                        console.error('HLS Error:', data);
+                    }});
+                }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
+                    video.src = url; // Safari native HLS support
                 }}
             }} else {{ if (window.hls) window.hls.destroy(); video.src = url; }}
             player.play();
         }}
         function updateQuality(newQuality) {{
-            if (window.hls) {{
+            if (!window.hls) return;
+            
+            // If user selects "Auto" (0)
+            if (newQuality === 0) {{
+                window.hls.currentLevel = -1; // -1 means auto quality
+            }} else {{
+                // Find the level with matching height
                 window.hls.levels.forEach((level, levelIndex) => {{
-                    if (level.height === newQuality) {{ window.hls.currentLevel = levelIndex; }}
+                    if (level.height === newQuality) {{
+                        window.hls.currentLevel = levelIndex;
+                    }}
                 }});
             }}
         }}
