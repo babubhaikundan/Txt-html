@@ -178,6 +178,11 @@ def generate_html(file_name, structured_list):
         /* Loading Animation */
         .custom-loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; border: 5px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #007bff; animation: spin 1s ease-in-out infinite; z-index: 10; display: none; }}
         @keyframes spin {{ to {{ transform: translate(-50%, -50%) rotate(360deg); }} }}
+        
+        /* Video Type Indicator */
+        .video-type-indicator {{ position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }}
+        .video-type-indicator.hls {{ background: rgba(255, 99, 71, 0.7); }}
+        .video-type-indicator.mp4 {{ background: rgba(30, 144, 255, 0.7); }}
     </style>
 </head>
 <body>
@@ -185,6 +190,7 @@ def generate_html(file_name, structured_list):
     <div class="main-container">
         <div class="player-wrapper">
             <div class="network-indicator" id="networkIndicator">Checking connection...</div>
+            <div class="video-type-indicator" id="videoTypeIndicator" style="display: none;">Video Type</div>
             <div class="custom-loading" id="customLoading"></div>
             <video id="player" class="player" playsinline controls></video>
         </div>
@@ -194,6 +200,7 @@ def generate_html(file_name, structured_list):
     {new_footer}
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script>
         // Initialize WOW library for animations
@@ -285,6 +292,7 @@ def generate_html(file_name, structured_list):
         
         // Custom loading indicator
         const customLoading = document.getElementById('customLoading');
+        const videoTypeIndicator = document.getElementById('videoTypeIndicator');
         
         player.on('ready', (event) => {{
             const instance = event.detail.plyr;
@@ -365,34 +373,102 @@ def generate_html(file_name, structured_list):
             // Detect network quality before playing
             detectNetworkQuality();
             
-            // Set video source
-            player.source = {{
-                type: 'video',
-                sources: [
-                    {{ src: url, type: 'video/mp4', size: 1080 }},
-                    {{ src: url, type: 'video/mp4', size: 720 }},
-                    {{ src: url, type: 'video/mp4', size: 480 }},
-                    {{ src: url, type: 'video/mp4', size: 360 }},
-                    {{ src: url, type: 'video/mp4', size: 240 }},
-                ]
-            }};
-            
-            // Auto-select quality based on network
-            if (networkQuality === 'good') {{
-                player.quality = 1080;
-            }} else if (networkQuality === 'medium') {{
-                player.quality = 720;
-            }} else {{
-                player.quality = 480;
-            }}
-            
-            // Play the video
-            player.play();
-            
             // Update the playing indicator
             if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
             element.classList.add('playing');
             currentlyPlaying = element;
+            
+            // Check if the URL is an HLS stream
+            const isHls = url.toLowerCase().includes('.m3u8');
+            
+            // Show video type indicator
+            videoTypeIndicator.textContent = isHls ? 'HLS Stream' : 'MP4 Video';
+            videoTypeIndicator.className = isHls ? 'video-type-indicator hls' : 'video-type-indicator mp4';
+            videoTypeIndicator.style.display = 'block';
+            
+            // Hide the indicator after 3 seconds
+            setTimeout(() => {{
+                videoTypeIndicator.style.display = 'none';
+            }}, 3000);
+            
+            if (isHls) {{
+                // Handle HLS streams
+                if (Hls.isSupported()) {{
+                    const hls = new Hls();
+                    hls.loadSource(url);
+                    hls.attachMedia(player.media);
+                    
+                    // Auto-select quality based on network
+                    hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {{
+                        if (networkQuality === 'good') {{
+                            // Select highest quality
+                            hls.currentLevel = hls.levels.length - 1;
+                        }} else if (networkQuality === 'medium') {{
+                            // Select medium quality
+                            hls.currentLevel = Math.floor(hls.levels.length / 2);
+                        }} else {{
+                            // Select lowest quality
+                            hls.currentLevel = 0;
+                        }}
+                    }});
+                    
+                    hls.on(Hls.Events.ERROR, function(event, data) {{
+                        if (data.fatal) {{
+                            switch(data.type) {{
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    // Try to recover network error
+                                    hls.startLoad();
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    // Try to recover media error
+                                    hls.recoverMediaError();
+                                    break;
+                                default:
+                                    // Cannot recover
+                                    hls.destroy();
+                                    break;
+                            }}
+                        }}
+                    }});
+                }} else if (player.media.canPlayType('application/vnd.apple.mpegurl')) {{
+                    // For Safari, which has native HLS support
+                    player.source = {{
+                        type: 'video',
+                        sources: [
+                            {{ src: url, type: 'application/vnd.apple.mpegurl' }}
+                        ]
+                    }};
+                }} else {{
+                    // HLS is not supported
+                    alert('HLS is not supported in your browser');
+                    customLoading.style.display = 'none';
+                    return;
+                }}
+            }} else {{
+                // Handle MP4 videos
+                player.source = {{
+                    type: 'video',
+                    sources: [
+                        {{ src: url, type: 'video/mp4', size: 1080 }},
+                        {{ src: url, type: 'video/mp4', size: 720 }},
+                        {{ src: url, type: 'video/mp4', size: 480 }},
+                        {{ src: url, type: 'video/mp4', size: 360 }},
+                        {{ src: url, type: 'video/mp4', size: 240 }},
+                    ]
+                }};
+                
+                // Auto-select quality based on network
+                if (networkQuality === 'good') {{
+                    player.quality = 1080;
+                }} else if (networkQuality === 'medium') {{
+                    player.quality = 720;
+                }} else {{
+                    player.quality = 480;
+                }}
+            }}
+            
+            // Play the video
+            player.play();
         }}
 
         // Accordion and Search script
