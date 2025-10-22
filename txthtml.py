@@ -43,7 +43,6 @@ def parse_line(name):
 def structure_data_in_order(urls):
     """
     Processes URLs sequentially to maintain their original order and groups them by subject.
-    Links PDFs and videos of the same lecture together.
     """
     structured_list = []
     subject_map = {}
@@ -81,13 +80,12 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with the good design and the powerful new player features.
+    Generates the final HTML with the new Plyr.js player and all requested features.
     """
     content_html = ""
     if not structured_list:
-        content_html = "<p class='text-center'>No content found to display.</p>"
+        content_html = "<p class='text-center text-white'>No content found to display.</p>"
     else:
-        # Create a unique ID for each accordion item to prevent conflicts
         item_id_counter = 0
         for subject_data in structured_list:
             subject_name = subject_data["name"]
@@ -115,7 +113,7 @@ def generate_html(file_name, structured_list):
             """
             item_id_counter += 1
 
-    new_footer = f"""
+    new_footer = """
     <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
         <a href="https://babubhaikundan.blogspot.com" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; background: #222; padding: 8px 16px; border-radius: 20px; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
             <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" style="width: 20px; height: 20px;">
@@ -135,10 +133,7 @@ def generate_html(file_name, structured_list):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{file_name}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {{ --primary-color: #007bff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c; }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
@@ -155,398 +150,67 @@ def generate_html(file_name, structured_list):
         .lecture-entry {{ padding: 15px 0; border-bottom: 1px solid #f0f0f0; }} .lecture-entry:last-child {{ border-bottom: none; }}
         .lecture-title {{ font-weight: 600; margin-bottom: 12px; color: #333; }}
         .lecture-links {{ display: flex; flex-wrap: wrap; gap: 10px; }}
-        .list-item {{ display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 20px; text-decoration: none; font-weight: 500; transition: all 0.2s ease; }}
+        .list-item {{ display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 20px; text-decoration: none; font-weight: 500; transition: all 0.2s ease; cursor: pointer; }}
         .video-item {{ background-color: #e9f5ff; color: #0056b3; border: 1px solid #b3d7ff; }}
         .video-item.playing, .video-item:hover {{ background-color: #007bff; color: white; border-color: #007bff; transform: translateY(-2px); }}
         .pdf-item {{ background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3; }}
         .pdf-item:hover {{ background-color: #ff5722; color: white; border-color: #ff5722; }}
-        
-        /* Plyr.js Custom Styles */
-        .plyr {{ border-radius: 8px; overflow: hidden; }}
-        .plyr__video-wrapper {{ background: #000; }}
-        .plyr__control--overlaid {{ background: rgba(0, 0, 0, 0.7); }}
-        .plyr__progress__buffer {{ color: rgba(255, 255, 255, 0.25); }}
-        .plyr--full-ui input[type=range] {{ color: #007bff; }}
-        .plyr__menu__container {{ background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); }}
-        
-        /* Custom Quality Selector */
-        .hls-quality-selector {{ position: absolute; bottom: 55px; right: 10px; background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); border-radius: 8px; padding: 8px 0; z-index: 10; display: none; }}
-        .hls-quality-selector button {{ display: block; width: 100%; padding: 8px 16px; background: none; border: none; color: white; text-align: left; cursor: pointer; transition: background 0.2s; }}
-        .hls-quality-selector button:hover {{ background: rgba(255, 255, 255, 0.1); }}
-        .hls-quality-selector button.active {{ background: rgba(0, 123, 255, 0.5); }}
-        .hls-quality-button {{ position: absolute; bottom: 55px; right: 10px; background: rgba(28, 28, 28, 0.9); backdrop-filter: blur(10px); border-radius: 8px; padding: 8px 12px; color: white; cursor: pointer; z-index: 10; display: none; }}
-        
-        /* Network Status Indicator */
-        .network-indicator {{ position: absolute; top: 10px; right: 10px; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }}
-        .network-indicator.good {{ background: rgba(0, 128, 0, 0.7); }}
-        .network-indicator.medium {{ background: rgba(255, 165, 0, 0.7); }}
-        .network-indicator.poor {{ background: rgba(255, 0, 0, 0.7); }}
-        
-        /* Loading Animation */
-        .custom-loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; border: 5px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #007bff; animation: spin 1s ease-in-out infinite; z-index: 10; display: none; }}
-        @keyframes spin {{ to {{ transform: translate(-50%, -50%) rotate(360deg); }} }}
-        
-        /* Video Type Indicator */
-        .video-type-indicator {{ position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }}
-        .video-type-indicator.hls {{ background: rgba(255, 99, 71, 0.7); }}
-        .video-type-indicator.mp4 {{ background: rgba(30, 144, 255, 0.7); }}
     </style>
 </head>
 <body>
     <div class="header">{file_name}</div>
     <div class="main-container">
-        <div class="player-wrapper">
-            <div class="network-indicator" id="networkIndicator">Checking connection...</div>
-            <div class="video-type-indicator" id="videoTypeIndicator" style="display: none;">Video Type</div>
-            <div class="custom-loading" id="customLoading"></div>
-            <div class="hls-quality-button" id="hlsQualityButton">Quality</div>
-            <div class="hls-quality-selector" id="hlsQualitySelector"></div>
-            <video id="player" class="player" playsinline controls></video>
-        </div>
+        <div class="player-wrapper"><video id="player" playsinline controls></video></div>
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search for lectures..." onkeyup="filterContent()"></div>
         <div id="content-container">{content_html}</div>
     </div>
     {new_footer}
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        // Initialize WOW library for animations
-        new WOW().init();
-        
-        // Network Quality Detection
-        let networkQuality = 'good';
-        let connectionSpeed = 0;
-        
-        function detectNetworkQuality() {{
-            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-            const networkIndicator = document.getElementById('networkIndicator');
-            
-            if (connection) {{
-                connectionSpeed = connection.downlink || 0;
-                
-                if (connectionSpeed > 5) {{
-                    networkQuality = 'good';
-                    networkIndicator.textContent = 'Good Connection';
-                    networkIndicator.className = 'network-indicator good';
-                }} else if (connectionSpeed > 1.5) {{
-                    networkQuality = 'medium';
-                    networkIndicator.textContent = 'Medium Connection';
-                    networkIndicator.className = 'network-indicator medium';
-                }} else {{
-                    networkQuality = 'poor';
-                    networkIndicator.textContent = 'Slow Connection';
-                    networkIndicator.className = 'network-indicator poor';
-                }}
-            }} else {{
-                // Fallback: Use a simple bandwidth test
-                const img = new Image();
-                const startTime = new Date().getTime();
-                img.onload = function() {{
-                    const endTime = new Date().getTime();
-                    const duration = (endTime - startTime) / 1000;
-                    const speed = (img.fileSize / 1048576) / duration; // MBps
-                    
-                    if (speed > 5) {{
-                        networkQuality = 'good';
-                        networkIndicator.textContent = 'Good Connection';
-                        networkIndicator.className = 'network-indicator good';
-                    }} else if (speed > 1.5) {{
-                        networkQuality = 'medium';
-                        networkIndicator.textContent = 'Medium Connection';
-                        networkIndicator.className = 'network-indicator medium';
-                    }} else {{
-                        networkQuality = 'poor';
-                        networkIndicator.textContent = 'Slow Connection';
-                        networkIndicator.className = 'network-indicator poor';
-                    }}
-                }};
-                img.src = 'https://www.google.com/images/phd/px.gif?' + startTime;
-                img.fileSize = 40000; // Approximate file size in bytes
-            }}
-            
-            // Hide the indicator after 3 seconds
-            setTimeout(() => {{
-                networkIndicator.style.display = 'none';
-            }}, 3000);
-        }}
-        
-        // Initialize network quality detection
-        detectNetworkQuality();
-        
-        // Player initialization with Plyr.js
-        const player = new Plyr('#player', {{
-            controls: [
-                'play-large',
-                'play',
-                'progress',
-                'current-time',
-                'duration',
-                'mute',
-                'pip',
-                'fullscreen'
-            ],
-            dblclickFullscreen: false,
-        }});
-        
-        // Store player in window object for global access
-        window.player = player;
-        
-        // HLS.js instance
-        let hlsInstance = null;
-        
-        // Custom loading indicator
-        const customLoading = document.getElementById('customLoading');
-        const videoTypeIndicator = document.getElementById('videoTypeIndicator');
-        const hlsQualityButton = document.getElementById('hlsQualityButton');
-        const hlsQualitySelector = document.getElementById('hlsQualitySelector');
-        
-        player.on('ready', (event) => {{
-            const instance = event.detail.plyr;
-            const container = instance.elements.container;
+        document.addEventListener('DOMContentLoaded', () => {{
+            const video = document.getElementById('player');
+            const player = new Plyr(video, {{
+                settings: ['quality', 'speed', 'loop'],
+                speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }},
+                quality: {{ default: 720, options: [4320, 2160, 1440, 1080, 720, 480, 360, 240] }},
+            }});
+            window.player = player;
+            window.hls = new Hls();
+
+            // Double tap to seek
+            const container = player.elements.container;
             let lastTap = 0;
-            let isSeeking = false;
-            
-            // Double-tap to seek functionality
-            container.addEventListener('touchend', event => {{
-                const currentTime = new Date().getTime();
-                const tapLength = currentTime - lastTap;
-                
-                if (tapLength < 300 && tapLength > 0 && !isSeeking) {{
-                    isSeeking = true;
-                    event.preventDefault();
-                    
-                    const containerRect = container.getBoundingClientRect();
-                    const touchX = event.changedTouches[0].clientX;
-                    const midpoint = containerRect.left + (containerRect.width / 2);
-                    
-                    if (touchX < midpoint) {{
-                        instance.rewind(7);
-                    }} else {{
-                        instance.forward(7);
-                    }}
-                    
-                    setTimeout(() => {{ isSeeking = false; }}, 300);
+            container.addEventListener('touchend', (event) => {{
+                const now = new Date().getTime();
+                if ((now - lastTap) < 300) {{
+                    const rect = container.getBoundingClientRect();
+                    const tapX = event.changedTouches[0].clientX - rect.left;
+                    player.forward(tapX > rect.width / 2 ? 10 : -10);
                 }}
-                lastTap = currentTime;
-            }});
-            
-            // Auto-rotate to landscape when entering fullscreen
-            instance.on('enterfullscreen', () => {{
-                try {{
-                    if (screen.orientation && typeof screen.orientation.lock === 'function') {{
-                        screen.orientation.lock('landscape');
-                    }}
-                }} catch (e) {{ /* Ignore errors */ }}
-            }});
-            
-            // Unlock screen orientation when exiting fullscreen
-            instance.on('exitfullscreen', () => {{
-                try {{
-                    if (screen.orientation && typeof screen.orientation.unlock === 'function') {{
-                        screen.orientation.unlock();
-                    }}
-                }} catch (e) {{ /* Ignore errors */ }}
+                lastTap = now;
             }});
         }});
-        
-        // Show loading indicator when loading video
-        player.on('waiting', () => {{
-            customLoading.style.display = 'block';
-        }});
-        
-        player.on('playing', () => {{
-            customLoading.style.display = 'none';
-        }});
-        
-        // HLS Quality Selector
-        function setupHlsQualitySelector(hls) {{
-            // Clear existing options
-            hlsQualitySelector.innerHTML = '';
-            
-            // Add quality options
-            for (let i = 0; i < hls.levels.length; i++) {{
-                const level = hls.levels[i];
-                const height = level.height;
-                const bitrate = Math.round(level.bitrate / 1000);
-                
-                const button = document.createElement('button');
-                button.textContent = `${{height}}p (${{bitrate}} kbps)`;
-                button.dataset.level = i;
-                
-                button.addEventListener('click', () => {{
-                    hls.currentLevel = parseInt(button.dataset.level);
-                    updateQualityButtons(hls);
-                }});
-                
-                hlsQualitySelector.appendChild(button);
-            }}
-            
-            // Add Auto option
-            const autoButton = document.createElement('button');
-            autoButton.textContent = 'Auto';
-            autoButton.dataset.level = -1;
-            
-            autoButton.addEventListener('click', () => {{
-                hls.currentLevel = -1;
-                updateQualityButtons(hls);
-            }});
-            
-            hlsQualitySelector.appendChild(autoButton);
-            
-            // Show quality button
-            hlsQualityButton.style.display = 'block';
-            
-            // Set initial quality based on network
-            if (networkQuality === 'good') {{
-                hls.currentLevel = hls.levels.length - 1; // Highest quality
-            }} else if (networkQuality === 'medium') {{
-                hls.currentLevel = Math.floor(hls.levels.length / 2); // Medium quality
-            }} else {{
-                hls.currentLevel = 0; // Lowest quality
-            }}
-            
-            updateQualityButtons(hls);
-        }}
-        
-        function updateQualityButtons(hls) {{
-            const buttons = hlsQualitySelector.querySelectorAll('button');
-            buttons.forEach(button => {{
-                const level = parseInt(button.dataset.level);
-                if (level === hls.currentLevel) {{
-                    button.classList.add('active');
-                }} else {{
-                    button.classList.remove('active');
-                }}
-            }});
-        }}
-        
-        // Toggle quality selector
-        hlsQualityButton.addEventListener('click', () => {{
-            hlsQualitySelector.style.display = hlsQualitySelector.style.display === 'block' ? 'none' : 'block';
-        }});
-        
-        // Hide quality selector when clicking outside
-        document.addEventListener('click', (e) => {{
-            if (!hlsQualityButton.contains(e.target) && !hlsQualitySelector.contains(e.target)) {{
-                hlsQualitySelector.style.display = 'none';
-            }}
-        }});
-        
+
         let currentlyPlaying = null;
         function playVideo(event, url, element) {{
-            event.preventDefault();
+            event.preventDefault(); // FIXES PAGE JUMPING
             
-            // Show loading indicator
-            customLoading.style.display = 'block';
-            
-            // Detect network quality before playing
-            detectNetworkQuality();
-            
-            // Update the playing indicator
             if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
             element.classList.add('playing');
             currentlyPlaying = element;
-            
-            // Check if the URL is an HLS stream
-            const isHls = url.toLowerCase().includes('.m3u8');
-            
-            // Show video type indicator
-            videoTypeIndicator.textContent = isHls ? 'HLS Stream' : 'MP4 Video';
-            videoTypeIndicator.className = isHls ? 'video-type-indicator hls' : 'video-type-indicator mp4';
-            videoTypeIndicator.style.display = 'block';
-            
-            // Hide the indicator after 3 seconds
-            setTimeout(() => {{
-                videoTypeIndicator.style.display = 'none';
-            }}, 3000);
-            
-            // Hide quality selector for MP4 videos
-            hlsQualityButton.style.display = 'none';
-            hlsQualitySelector.style.display = 'none';
-            
-            if (isHls) {{
-                // Handle HLS streams
+
+            const video = document.getElementById('player');
+            if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
-                    // Destroy previous HLS instance if exists
-                    if (hlsInstance) {{
-                        hlsInstance.destroy();
-                    }}
-                    
-                    // Create new HLS instance
-                    hlsInstance = new Hls({{
-                        debug: false,
-                        enableWorker: true,
-                        lowLatencyMode: true,
-                        backBufferLength: 90
-                    }});
-                    
-                    hlsInstance.loadSource(url);
-                    hlsInstance.attachMedia(player.media);
-                    
-                    // Setup quality selector when manifest is parsed
-                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, function(event, data) {{
-                        setupHlsQualitySelector(hlsInstance);
-                    }});
-                    
-                    hlsInstance.on(Hls.Events.ERROR, function(event, data) {{
-                        if (data.fatal) {{
-                            switch(data.type) {{
-                                case Hls.ErrorTypes.NETWORK_ERROR:
-                                    // Try to recover network error
-                                    hlsInstance.startLoad();
-                                    break;
-                                case Hls.ErrorTypes.MEDIA_ERROR:
-                                    // Try to recover media error
-                                    hlsInstance.recoverMediaError();
-                                    break;
-                                default:
-                                    // Cannot recover
-                                    hlsInstance.destroy();
-                                    break;
-                            }}
-                        }}
-                    }});
-                }} else if (player.media.canPlayType('application/vnd.apple.mpegurl')) {{
-                    // For Safari, which has native HLS support
-                    player.source = {{
-                        type: 'video',
-                        sources: [
-                            {{ src: url, type: 'application/vnd.apple.mpegurl' }}
-                        ]
-                    }};
-                }} else {{
-                    // HLS is not supported
-                    alert('HLS is not supported in your browser');
-                    customLoading.style.display = 'none';
-                    return;
+                    window.hls.loadSource(url);
+                    window.hls.attachMedia(video);
                 }}
             }} else {{
-                // Handle MP4 videos
-                player.source = {{
-                    type: 'video',
-                    sources: [
-                        {{ src: url, type: 'video/mp4', size: 1080 }},
-                        {{ src: url, type: 'video/mp4', size: 720 }},
-                        {{ src: url, type: 'video/mp4', size: 480 }},
-                        {{ src: url, type: 'video/mp4', size: 360 }},
-                        {{ src: url, type: 'video/mp4', size: 240 }},
-                    ]
-                }};
-                
-                // Auto-select quality based on network
-                if (networkQuality === 'good') {{
-                    player.quality = 240p;
-                }} else if (networkQuality === 'medium') {{
-                    player.quality = 720;
-                }} else {{
-                    player.quality = 480;
-                }}
+                video.src = url;
             }}
-            
-            // Play the video
-            player.play();
+            window.player.play();
         }}
 
         // Accordion and Search script
