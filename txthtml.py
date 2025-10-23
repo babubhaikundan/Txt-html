@@ -174,6 +174,11 @@ def generate_html(file_name, structured_list):
             
             const video = document.getElementById('player');
             
+            // Destroy previous player completely
+            if (player) {{
+                player.destroy();
+            }}
+            
             if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
                     // Destroy previous HLS instance
@@ -198,13 +203,7 @@ def generate_html(file_name, structured_list):
                         
                         console.log('Available qualities:', availableQualities);
                         
-                        // Store current time before destroying
-                        const currentTime = video.currentTime;
-                        const wasPlaying = !video.paused;
-                        
-                        // CRITICAL: Destroy and recreate Plyr with new quality options
-                        player.destroy();
-                        
+                        // NOW create Plyr with proper quality options
                         player = new Plyr(video, {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
@@ -214,32 +213,37 @@ def generate_html(file_name, structured_list):
                                 options: availableQualities,
                                 forced: true,
                                 onChange: (quality) => updateQuality(quality)
-                            }},
-                            autoplay: true
+                            }}
                         }});
                         
-                        // Restore position and play
-                        player.once('ready', () => {{
-                            if (currentTime > 0) {{
-                                video.currentTime = currentTime;
-                            }}
-                            player.play().catch(err => console.log('Autoplay prevented:', err));
+                        // Wait for video to be ready to play
+                        video.addEventListener('loadeddata', function onLoaded() {{
+                            video.removeEventListener('loadeddata', onLoaded);
+                            player.play().catch(err => {{
+                                console.log('Play prevented, user interaction required');
+                            }});
                         }});
                     }});
                     
-                    // Error handling
+                    // Error handling with better recovery
                     hls.on(Hls.Events.ERROR, function (event, data) {{
+                        console.log('HLS Event:', event, data);
+                        
                         if (data.fatal) {{
                             console.error('Fatal HLS error:', data);
                             switch(data.type) {{
                                 case Hls.ErrorTypes.NETWORK_ERROR:
+                                    console.log('Network error, trying to recover...');
                                     hls.startLoad();
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
+                                    console.log('Media error, trying to recover...');
                                     hls.recoverMediaError();
                                     break;
                                 default:
+                                    console.log('Unrecoverable error, destroying HLS');
                                     hls.destroy();
+                                    alert('Video loading failed. Please try again.');
                                     break;
                             }}
                         }}
@@ -248,6 +252,14 @@ def generate_html(file_name, structured_list):
                 }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
                     // Safari native HLS support
                     video.src = url;
+                    
+                    // Create Plyr for Safari
+                    player = new Plyr(video, {{
+                        controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
+                        settings: ['speed'],
+                        speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}}
+                    }});
+                    
                     player.play();
                 }}
             }} else {{
@@ -256,7 +268,16 @@ def generate_html(file_name, structured_list):
                     hls.destroy();
                     hls = null;
                 }}
+                
                 video.src = url;
+                
+                // Create Plyr for regular video
+                player = new Plyr(video, {{
+                    controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
+                    settings: ['speed'],
+                    speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}}
+                }});
+                
                 player.play();
             }}
         }}
