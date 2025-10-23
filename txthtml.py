@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with proper HLS quality switching that actually works!
+    Generates the final HTML with PROPER HLS quality switching and UI sync!
     """
     content_html = ""
     if not structured_list:
@@ -120,6 +120,7 @@ def generate_html(file_name, structured_list):
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
         .plyr--volume {{display: none !important;}}
+        .plyr__controls {{pointer-events: auto !important;}}
     </style>
 </head>
 <body>
@@ -134,34 +135,54 @@ def generate_html(file_name, structured_list):
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
         let player, hls;
+        let isPlayerReady = false;
         
         document.addEventListener('DOMContentLoaded', () => {{
-            const video = document.getElementById('player');
-            
-            // Initialize Plyr WITHOUT quality options first
-            player = new Plyr(video, {{
-                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
-                settings: ['quality', 'speed'],
-                speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
-                quality: {{
-                    default: 576,
-                    options: [360, 480, 576, 720]
-                }}
-            }});
-            
-            // Double tap to seek
-            const container = player.elements.container;
-            let lastTap = 0;
-            container.addEventListener('touchend', (event) => {{
-                const now = new Date().getTime();
-                if ((now - lastTap) < 300) {{
-                    const rect = container.getBoundingClientRect();
-                    const tapX = event.changedTouches[0].clientX - rect.left;
-                    player.forward(tapX > rect.width / 2 ? 10 : -10);
-                }}
-                lastTap = now;
-            }});
+            // Empty initialization - player will be created when video is selected
+            setupDoubleTapSeek();
         }});
+        
+        function setupDoubleTapSeek() {{
+            const playerWrapper = document.querySelector('.player-wrapper');
+            let lastTap = 0;
+            let tapTimeout;
+            
+            playerWrapper.addEventListener('click', (event) => {{
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTap;
+                
+                // Clear any existing timeout
+                clearTimeout(tapTimeout);
+                
+                if (tapLength < 300 && tapLength > 0) {{
+                    // Double tap detected
+                    event.preventDefault();
+                    event.stopPropagation();
+                    
+                    if (player && isPlayerReady) {{
+                        const rect = playerWrapper.getBoundingClientRect();
+                        const clickX = event.clientX - rect.left;
+                        const halfWidth = rect.width / 2;
+                        
+                        if (clickX < halfWidth) {{
+                            // Left side - seek backward
+                            player.rewind(10);
+                        }} else {{
+                            // Right side - seek forward
+                            player.forward(10);
+                        }}
+                    }}
+                    
+                    lastTap = 0; // Reset
+                }} else {{
+                    // Single tap - wait to see if another tap comes
+                    tapTimeout = setTimeout(() => {{
+                        lastTap = 0;
+                    }}, 300);
+                    lastTap = currentTime;
+                }}
+            }}, true); // Use capture phase
+        }}
         
         let currentlyPlaying = null;
         
@@ -173,20 +194,23 @@ def generate_html(file_name, structured_list):
             currentlyPlaying = element;
             
             const video = document.getElementById('player');
+            isPlayerReady = false;
             
-            // Destroy previous player completely
+            // Destroy previous instances
             if (player) {{
                 player.destroy();
+                player = null;
+            }}
+            if (hls) {{
+                hls.destroy();
+                hls = null;
             }}
             
             if (url.includes('.m3u8')) {{
                 if (Hls.isSupported()) {{
-                    // Destroy previous HLS instance
-                    if (hls) {{
-                        hls.destroy();
-                    }}
+                    console.log('Loading HLS video:', url);
                     
-                    // Create new HLS instance
+                    // Create HLS instance
                     hls = new Hls({{
                         enableWorker: true,
                         lowLatencyMode: true,
@@ -196,14 +220,12 @@ def generate_html(file_name, structured_list):
                     hls.loadSource(url);
                     hls.attachMedia(video);
                     
-                    // When manifest is parsed, update quality options
+                    // Wait for manifest to parse
                     hls.on(Hls.Events.MANIFEST_PARSED, function () {{
-                        // Get available quality levels
                         const availableQualities = hls.levels.map((l) => l.height);
-                        
                         console.log('Available qualities:', availableQualities);
                         
-                        // NOW create Plyr with proper quality options
+                        // Create Plyr with quality options
                         player = new Plyr(video, {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
@@ -213,35 +235,41 @@ def generate_html(file_name, structured_list):
                                 options: availableQualities,
                                 forced: true,
                                 onChange: (quality) => updateQuality(quality)
-                            }}
+                            }},
+                            clickToPlay: true
                         }});
                         
-                        // Wait for video to be ready to play
-                        video.addEventListener('loadeddata', function onLoaded() {{
-                            video.removeEventListener('loadeddata', onLoaded);
-                            player.play().catch(err => {{
-                                console.log('Play prevented, user interaction required');
+                        console.log('Plyr created, waiting for canplay event');
+                        
+                        // CRITICAL: Wait for video to be fully ready before playing
+                        video.addEventListener('canplay', function onCanPlay() {{
+                            video.removeEventListener('canplay', onCanPlay);
+                            console.log('Video can play now');
+                            isPlayerReady = true;
+                            
+                            // Now play the video
+                            player.play().then(() => {{
+                                console.log('Video playing successfully');
+                            }}).catch(err => {{
+                                console.log('Autoplay prevented:', err);
                             }});
                         }});
                     }});
                     
-                    // Error handling with better recovery
+                    // Error handling
                     hls.on(Hls.Events.ERROR, function (event, data) {{
-                        console.log('HLS Event:', event, data);
-                        
                         if (data.fatal) {{
                             console.error('Fatal HLS error:', data);
                             switch(data.type) {{
                                 case Hls.ErrorTypes.NETWORK_ERROR:
-                                    console.log('Network error, trying to recover...');
+                                    console.log('Network error, trying to recover');
                                     hls.startLoad();
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
-                                    console.log('Media error, trying to recover...');
+                                    console.log('Media error, trying to recover');
                                     hls.recoverMediaError();
                                     break;
                                 default:
-                                    console.log('Unrecoverable error, destroying HLS');
                                     hls.destroy();
                                     alert('Video loading failed. Please try again.');
                                     break;
@@ -250,35 +278,34 @@ def generate_html(file_name, structured_list):
                     }});
                     
                 }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
-                    // Safari native HLS support
+                    // Safari native HLS
                     video.src = url;
-                    
-                    // Create Plyr for Safari
                     player = new Plyr(video, {{
                         controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                         settings: ['speed'],
                         speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}}
                     }});
                     
-                    player.play();
+                    video.addEventListener('canplay', function onCanPlay() {{
+                        video.removeEventListener('canplay', onCanPlay);
+                        isPlayerReady = true;
+                        player.play();
+                    }});
                 }}
             }} else {{
                 // Regular MP4 video
-                if (hls) {{
-                    hls.destroy();
-                    hls = null;
-                }}
-                
                 video.src = url;
-                
-                // Create Plyr for regular video
                 player = new Plyr(video, {{
                     controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                     settings: ['speed'],
                     speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}}
                 }});
                 
-                player.play();
+                video.addEventListener('canplay', function onCanPlay() {{
+                    video.removeEventListener('canplay', onCanPlay);
+                    isPlayerReady = true;
+                    player.play();
+                }});
             }}
         }}
         
@@ -287,10 +314,9 @@ def generate_html(file_name, structured_list):
             
             console.log('Switching to quality:', newQuality);
             
-            // Find the level index for the selected quality
             hls.levels.forEach((level, levelIndex) => {{
                 if (level.height === newQuality) {{
-                    console.log('Setting quality to level', levelIndex, ':', level.height + 'p');
+                    console.log('Setting quality level:', levelIndex, '-', level.height + 'p');
                     hls.currentLevel = levelIndex;
                 }}
             }});
