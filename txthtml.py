@@ -198,6 +198,10 @@ def generate_html(file_name, structured_list):
                         
                         console.log('Available qualities:', availableQualities);
                         
+                        // Store current time before destroying
+                        const currentTime = video.currentTime;
+                        const wasPlaying = !video.paused;
+                        
                         // CRITICAL: Destroy and recreate Plyr with new quality options
                         player.destroy();
                         
@@ -210,11 +214,17 @@ def generate_html(file_name, structured_list):
                                 options: availableQualities,
                                 forced: true,
                                 onChange: (quality) => updateQuality(quality)
-                            }}
+                            }},
+                            autoplay: true
                         }});
                         
-                        // Start playing
-                        player.play();
+                        // Restore position and play
+                        player.once('ready', () => {{
+                            if (currentTime > 0) {{
+                                video.currentTime = currentTime;
+                            }}
+                            player.play().catch(err => console.log('Autoplay prevented:', err));
+                        }});
                     }});
                     
                     // Error handling
