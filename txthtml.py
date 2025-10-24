@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    FINAL PERFECT HTML - Research-based solution for all issues
+    FINAL WORKING SOLUTION - Research-based fix for all issues
     """
     content_html = ""
     if not structured_list:
@@ -106,7 +106,9 @@ def generate_html(file_name, structured_list):
         body {{background: var(--bg-color);}} .header {{background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold;}}
         .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto;}}
         .player-wrapper {{background: #000; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000;}}
-        .player-wrapper video {{pointer-events: auto !important;}}
+        .player-wrapper video {{pointer-events: none !important;}}
+        .plyr {{pointer-events: auto !important;}}
+        .plyr__controls {{pointer-events: auto !important;}}
         .search-bar input {{width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px;}}
         .accordion-item {{margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
         .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative;}}
@@ -126,7 +128,7 @@ def generate_html(file_name, structured_list):
 <body>
     <div class="header">{file_name}</div>
     <div class="main-container">
-        <div class="player-wrapper"><video id="player" playsinline controls crossorigin></video></div>
+        <div class="player-wrapper"><video id="player" playsinline controls crossorigin preload="metadata"></video></div>
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search..." onkeyup="filterContent()"></div>
         <div id="content-container">{content_html}</div>
     </div>
@@ -137,57 +139,67 @@ def generate_html(file_name, structured_list):
         let player = null;
         let hls = null;
         let isPlayerReady = false;
+        let playerWrapper, video;
         
-        // Double tap seek setup
-        let doubleTapTimeout = null;
-        let tapCount = 0;
+        // Double tap variables
+        let lastTapTime = 0;
+        let tapTimeout = null;
         
         document.addEventListener('DOMContentLoaded', () => {{
+            video = document.getElementById('player');
+            playerWrapper = document.querySelector('.player-wrapper');
             setupDoubleTapSeek();
         }});
         
+        // RESEARCH-BASED SOLUTION: Block fullscreen on video, allow on Plyr overlay
         function setupDoubleTapSeek() {{
-            const video = document.getElementById('player');
-            
-            // CRITICAL: Block native double-click fullscreen on video element
-            video.addEventListener('dblclick', (e) => {{
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                return false;
-            }}, {{ capture: true }});
-            
-            // Custom click handler on video only
-            video.addEventListener('click', (e) => {{
-                // Ignore if clicking on controls
+            // Plyr overlay ko double tap handle karega
+            playerWrapper.addEventListener('dblclick', (e) => {{
+                // Only if NOT on controls
                 if (e.target.closest('.plyr__controls')) return;
                 
-                tapCount++;
+                e.preventDefault();
+                e.stopImmediatePropagation();
                 
-                if (tapCount === 1) {{
-                    // First tap - wait for potential second tap
-                    doubleTapTimeout = setTimeout(() => {{
-                        tapCount = 0; // Reset after timeout
-                    }}, 300);
-                }} else if (tapCount === 2) {{
-                    // Second tap detected!
-                    clearTimeout(doubleTapTimeout);
-                    tapCount = 0;
+                if (player && isPlayerReady) {{
+                    const rect = playerWrapper.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
                     
+                    if (x < rect.width / 2) {{
+                        player.rewind(10);
+                        console.log('⏪ -10s');
+                    }} else {{
+                        player.forward(10);
+                        console.log('⏩ +10s');
+                    }}
+                }}
+            }});
+            
+            // Mobile touch
+            playerWrapper.addEventListener('touchend', (e) => {{
+                if (e.target.closest('.plyr__controls')) return;
+                
+                const now = Date.now();
+                const diff = now - lastTapTime;
+                
+                if (diff > 0 && diff < 300 && lastTapTime > 0) {{
                     e.preventDefault();
                     e.stopImmediatePropagation();
                     
                     if (player && isPlayerReady) {{
-                        const rect = video.getBoundingClientRect();
-                        const clickX = e.clientX - rect.left;
+                        const rect = playerWrapper.getBoundingClientRect();
+                        const x = e.changedTouches[0].clientX - rect.left;
                         
-                        if (clickX < rect.width / 2) {{
+                        if (x < rect.width / 2) {{
                             player.rewind(10);
-                            console.log('⏪ -10s');
                         }} else {{
                             player.forward(10);
-                            console.log('⏩ +10s');
                         }}
                     }}
+                    lastTapTime = 0;
+                }} else {{
+                    lastTapTime = now;
+                    setTimeout(() => lastTapTime = 0, 300);
                 }}
             }});
         }}
@@ -201,7 +213,6 @@ def generate_html(file_name, structured_list):
             element.classList.add('playing');
             currentlyPlaying = element;
             
-            const video = document.getElementById('player');
             isPlayerReady = false;
             
             // Clean up
@@ -214,6 +225,10 @@ def generate_html(file_name, structured_list):
                 hls = null;
             }}
             
+            // Remove any existing source
+            video.src = '';
+            video.load();
+            
             if (url.includes('.m3u8')) {{
                 // HLS VIDEO
                 if (Hls.isSupported()) {{
@@ -221,9 +236,7 @@ def generate_html(file_name, structured_list):
                     
                     hls = new Hls({{
                         enableWorker: true,
-                        lowLatencyMode: false, // Changed to false for better compatibility
-                        maxBufferLength: 30,
-                        maxMaxBufferLength: 60
+                        maxBufferLength: 30
                     }});
                     
                     hls.loadSource(url);
@@ -235,7 +248,7 @@ def generate_html(file_name, structured_list):
                         
                         console.log('✅ Qualities:', availableQualities);
                         
-                        // Create Plyr with quality options
+                        // Create Plyr AFTER manifest
                         player = new Plyr(video, {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
@@ -247,22 +260,20 @@ def generate_html(file_name, structured_list):
                                 onChange: (quality) => updateQuality(quality)
                             }},
                             i18n: {{ qualityLabel: {{ 0: 'Auto' }} }},
-                            fullscreen: {{ enabled: true, fallback: true, iosNative: true }}
+                            fullscreen: {{ enabled: true, fallback: true, iosNative: true }},
+                            clickToPlay: true
                         }});
                         
-                        // CRITICAL FIX: Wait for canplaythrough (more reliable than loadeddata)
-                        video.addEventListener('canplaythrough', function handler() {{
-                            video.removeEventListener('canplaythrough', handler);
+                        // CRITICAL FIX: Wait for Plyr 'ready' event (most reliable)
+                        player.on('ready', () => {{
+                            isPlayerReady = true;
+                            console.log('✅ Plyr ready');
                             
-                            // Wait for Plyr ready too
-                            player.once('ready', () => {{
-                                isPlayerReady = true;
-                                console.log('✅ Ready - playing now');
-                                
-                                // Play after small delay to ensure UI is fully rendered
-                                setTimeout(() => {{
-                                    player.play().catch(err => console.log('Autoplay blocked'));
-                                }}, 200);
+                            // Play immediately
+                            player.play().then(() => {{
+                                console.log('✅ Playing');
+                            }}).catch(err => {{
+                                console.log('Autoplay blocked:', err.message);
                             }});
                         }});
                         
@@ -306,12 +317,9 @@ def generate_html(file_name, structured_list):
                         speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}
                     }});
                     
-                    video.addEventListener('canplaythrough', function handler() {{
-                        video.removeEventListener('canplaythrough', handler);
-                        player.once('ready', () => {{
-                            isPlayerReady = true;
-                            setTimeout(() => player.play(), 200);
-                        }});
+                    player.on('ready', () => {{
+                        isPlayerReady = true;
+                        player.play();
                     }});
                 }}
             }} else {{
@@ -323,12 +331,9 @@ def generate_html(file_name, structured_list):
                     speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}
                 }});
                 
-                video.addEventListener('canplaythrough', function handler() {{
-                    video.removeEventListener('canplaythrough', handler);
-                    player.once('ready', () => {{
-                        isPlayerReady = true;
-                        setTimeout(() => player.play(), 200);
-                    }});
+                player.on('ready', () => {{
+                    isPlayerReady = true;
+                    player.play();
                 }});
             }}
         }}
