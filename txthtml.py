@@ -145,43 +145,78 @@ def generate_html(file_name, structured_list):
         function setupDoubleTapSeek() {{
             const playerWrapper = document.querySelector('.player-wrapper');
             let lastTap = 0;
-            let tapTimeout;
             
+            // Intercept all clicks on player wrapper
             playerWrapper.addEventListener('click', (event) => {{
+                // Don't interfere with control buttons
+                if (event.target.closest('.plyr__controls') || 
+                    event.target.closest('button') || 
+                    event.target.closest('[role="button"]')) {{
+                    return; // Let Plyr handle it
+                }}
+                
                 const currentTime = new Date().getTime();
                 const tapLength = currentTime - lastTap;
                 
-                // Clear any existing timeout
-                clearTimeout(tapTimeout);
-                
-                if (tapLength < 300 && tapLength > 0) {{
-                    // Double tap detected
+                if (tapLength < 300 && tapLength > 0 && lastTap > 0) {{
+                    // Double tap detected - PREVENT FULLSCREEN
                     event.preventDefault();
                     event.stopPropagation();
+                    event.stopImmediatePropagation();
                     
                     if (player && isPlayerReady) {{
                         const rect = playerWrapper.getBoundingClientRect();
-                        const clickX = event.clientX - rect.left;
+                        const clickX = event.clientX || event.touches[0].clientX;
                         const halfWidth = rect.width / 2;
                         
                         if (clickX < halfWidth) {{
-                            // Left side - seek backward
                             player.rewind(10);
                         }} else {{
-                            // Right side - seek forward
                             player.forward(10);
                         }}
                     }}
                     
-                    lastTap = 0; // Reset
-                }} else {{
-                    // Single tap - wait to see if another tap comes
-                    tapTimeout = setTimeout(() => {{
-                        lastTap = 0;
-                    }}, 300);
-                    lastTap = currentTime;
+                    lastTap = 0;
+                    return false;
                 }}
-            }}, true); // Use capture phase
+                
+                lastTap = currentTime;
+            }}, {{ capture: true }}); // Capture phase to intercept early
+            
+            // Also handle touch events for mobile
+            playerWrapper.addEventListener('touchend', (event) => {{
+                // Don't interfere with control buttons
+                if (event.target.closest('.plyr__controls') || 
+                    event.target.closest('button')) {{
+                    return;
+                }}
+                
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTap;
+                
+                if (tapLength < 300 && tapLength > 0 && lastTap > 0) {{
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    
+                    if (player && isPlayerReady) {{
+                        const rect = playerWrapper.getBoundingClientRect();
+                        const touchX = event.changedTouches[0].clientX;
+                        const halfWidth = rect.width / 2;
+                        
+                        if (touchX < halfWidth) {{
+                            player.rewind(10);
+                        }} else {{
+                            player.forward(10);
+                        }}
+                    }}
+                    
+                    lastTap = 0;
+                    return false;
+                }}
+                
+                lastTap = currentTime;
+            }}, {{ capture: true }});
         }}
         
         let currentlyPlaying = null;
