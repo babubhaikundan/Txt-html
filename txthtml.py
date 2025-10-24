@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with PERFECT HLS quality switching (Research-based implementation)
+    FINAL PERFECT HTML - Research-based solution for all issues
     """
     content_html = ""
     if not structured_list:
@@ -106,6 +106,7 @@ def generate_html(file_name, structured_list):
         body {{background: var(--bg-color);}} .header {{background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold;}}
         .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto;}}
         .player-wrapper {{background: #000; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000;}}
+        .player-wrapper video {{pointer-events: auto !important;}}
         .search-bar input {{width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px;}}
         .accordion-item {{margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
         .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative;}}
@@ -137,40 +138,49 @@ def generate_html(file_name, structured_list):
         let hls = null;
         let isPlayerReady = false;
         
+        // Double tap seek setup
+        let doubleTapTimeout = null;
+        let tapCount = 0;
+        
         document.addEventListener('DOMContentLoaded', () => {{
             setupDoubleTapSeek();
         }});
         
-        // PROPER Double Tap Handler (Blocks fullscreen completely)
         function setupDoubleTapSeek() {{
-            const playerWrapper = document.querySelector('.player-wrapper');
-            let lastTapTime = 0;
+            const video = document.getElementById('player');
             
-            // Block native double-click fullscreen
-            playerWrapper.addEventListener('dblclick', (e) => {{
+            // CRITICAL: Block native double-click fullscreen on video element
+            video.addEventListener('dblclick', (e) => {{
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 return false;
-            }}, {{ capture: true, passive: false }});
+            }}, {{ capture: true }});
             
-            // Custom tap handler
-            const handleTap = (e) => {{
-                // Ignore control clicks
-                if (e.target.closest('.plyr__controls, button, [data-plyr]')) return;
+            // Custom click handler on video only
+            video.addEventListener('click', (e) => {{
+                // Ignore if clicking on controls
+                if (e.target.closest('.plyr__controls')) return;
                 
-                const now = Date.now();
-                const timeDiff = now - lastTapTime;
+                tapCount++;
                 
-                if (timeDiff > 0 && timeDiff < 300 && lastTapTime !== 0) {{
-                    // DOUBLE TAP!
+                if (tapCount === 1) {{
+                    // First tap - wait for potential second tap
+                    doubleTapTimeout = setTimeout(() => {{
+                        tapCount = 0; // Reset after timeout
+                    }}, 300);
+                }} else if (tapCount === 2) {{
+                    // Second tap detected!
+                    clearTimeout(doubleTapTimeout);
+                    tapCount = 0;
+                    
                     e.preventDefault();
                     e.stopImmediatePropagation();
                     
                     if (player && isPlayerReady) {{
-                        const rect = playerWrapper.getBoundingClientRect();
-                        const x = (e.clientX || e.changedTouches?.[0]?.clientX) - rect.left;
+                        const rect = video.getBoundingClientRect();
+                        const clickX = e.clientX - rect.left;
                         
-                        if (x < rect.width / 2) {{
+                        if (clickX < rect.width / 2) {{
                             player.rewind(10);
                             console.log('⏪ -10s');
                         }} else {{
@@ -178,19 +188,12 @@ def generate_html(file_name, structured_list):
                             console.log('⏩ +10s');
                         }}
                     }}
-                    lastTapTime = 0;
-                    return false;
                 }}
-                lastTapTime = now;
-            }};
-            
-            playerWrapper.addEventListener('click', handleTap, {{ capture: true, passive: false }});
-            playerWrapper.addEventListener('touchend', handleTap, {{ capture: true, passive: false }});
+            }});
         }}
         
         let currentlyPlaying = null;
         
-        // MAIN PLAY VIDEO FUNCTION (Research-based implementation)
         function playVideo(event, url, element) {{
             event.preventDefault();
             
@@ -201,7 +204,7 @@ def generate_html(file_name, structured_list):
             const video = document.getElementById('player');
             isPlayerReady = false;
             
-            // Clean up previous instances
+            // Clean up
             if (player) {{
                 player.destroy();
                 player = null;
@@ -214,90 +217,69 @@ def generate_html(file_name, structured_list):
             if (url.includes('.m3u8')) {{
                 // HLS VIDEO
                 if (Hls.isSupported()) {{
-                    console.log('🎬 Loading HLS:', url);
+                    console.log('🎬 Loading HLS');
                     
                     hls = new Hls({{
                         enableWorker: true,
-                        lowLatencyMode: true,
-                        backBufferLength: 90
+                        lowLatencyMode: false, // Changed to false for better compatibility
+                        maxBufferLength: 30,
+                        maxMaxBufferLength: 60
                     }});
                     
                     hls.loadSource(url);
-                    hls.attachMedia(video); // IMPORTANT: Before MANIFEST_PARSED
+                    hls.attachMedia(video);
                     
-                    // CRITICAL: Proper quality implementation from research
                     hls.on(Hls.Events.MANIFEST_PARSED, function() {{
                         const availableQualities = hls.levels.map(l => l.height);
-                        availableQualities.unshift(0); // Add AUTO option
+                        availableQualities.unshift(0);
                         
                         console.log('✅ Qualities:', availableQualities);
                         
-                        // CORRECT way to add quality options (from StackOverflow)
-                        const defaultOptions = {{
+                        // Create Plyr with quality options
+                        player = new Plyr(video, {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
                             speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
                             quality: {{
-                                default: 0, // AUTO
+                                default: 0,
                                 options: availableQualities,
-                                forced: true, // CRITICAL!
+                                forced: true,
                                 onChange: (quality) => updateQuality(quality)
                             }},
-                            i18n: {{
-                                qualityLabel: {{ 0: 'Auto' }}
-                            }},
+                            i18n: {{ qualityLabel: {{ 0: 'Auto' }} }},
                             fullscreen: {{ enabled: true, fallback: true, iosNative: true }}
-                        }};
-                        
-                        // Create Plyr AFTER manifest parsed
-                        player = new Plyr(video, defaultOptions);
-                        
-                        // Wait for BOTH ready events
-                        let videoReady = false;
-                        let plyrReady = false;
-                        
-                        const startPlayback = () => {{
-                            if (videoReady && plyrReady) {{
-                                isPlayerReady = true;
-                                console.log('✅ Everything ready - playing');
-                                
-                                // Use requestAnimationFrame for smooth UI sync
-                                requestAnimationFrame(() => {{
-                                    player.play().catch(err => console.log('Autoplay:', err.message));
-                                }});
-                            }}
-                        }};
-                        
-                        video.addEventListener('loadeddata', function onLoad() {{
-                            video.removeEventListener('loadeddata', onLoad);
-                            videoReady = true;
-                            console.log('✅ Video data ready');
-                            startPlayback();
                         }});
                         
-                        player.on('ready', () => {{
-                            plyrReady = true;
-                            console.log('✅ Plyr UI ready');
-                            startPlayback();
+                        // CRITICAL FIX: Wait for canplaythrough (more reliable than loadeddata)
+                        video.addEventListener('canplaythrough', function handler() {{
+                            video.removeEventListener('canplaythrough', handler);
+                            
+                            // Wait for Plyr ready too
+                            player.once('ready', () => {{
+                                isPlayerReady = true;
+                                console.log('✅ Ready - playing now');
+                                
+                                // Play after small delay to ensure UI is fully rendered
+                                setTimeout(() => {{
+                                    player.play().catch(err => console.log('Autoplay blocked'));
+                                }}, 200);
+                            }});
                         }});
                         
                         // Fullscreen orientation
                         player.on('enterfullscreen', () => {{
                             try {{
                                 if (screen.orientation?.lock) screen.orientation.lock('landscape');
-                                else if (screen.lockOrientation) screen.lockOrientation('landscape');
                             }} catch(e) {{}}
                         }});
                         
                         player.on('exitfullscreen', () => {{
                             try {{
                                 if (screen.orientation?.unlock) screen.orientation.unlock();
-                                else if (screen.unlockOrientation) screen.unlockOrientation();
                             }} catch(e) {{}}
                         }});
                     }});
                     
-                    // HLS Error handling
                     hls.on(Hls.Events.ERROR, function(event, data) {{
                         if (data.fatal) {{
                             console.error('❌ HLS Error:', data.type);
@@ -310,62 +292,56 @@ def generate_html(file_name, structured_list):
                                     break;
                                 default:
                                     hls.destroy();
-                                    alert('Video failed to load. Please try again.');
                                     break;
                             }}
                         }}
                     }});
                     
                 }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
-                    // Safari native HLS
-                    console.log('🍎 Safari HLS');
+                    // Safari
                     video.src = url;
-                    
                     player = new Plyr(video, {{
                         controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                         settings: ['speed'],
-                        speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
-                        fullscreen: {{ enabled: true, iosNative: true }}
+                        speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}
                     }});
                     
-                    video.addEventListener('loadeddata', () => {{
-                        isPlayerReady = true;
-                        player.play();
+                    video.addEventListener('canplaythrough', function handler() {{
+                        video.removeEventListener('canplaythrough', handler);
+                        player.once('ready', () => {{
+                            isPlayerReady = true;
+                            setTimeout(() => player.play(), 200);
+                        }});
                     }});
                 }}
             }} else {{
-                // Regular MP4
-                console.log('🎥 MP4 video');
+                // MP4
                 video.src = url;
-                
                 player = new Plyr(video, {{
                     controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                     settings: ['speed'],
-                    speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
-                    fullscreen: {{ enabled: true, fallback: true }}
+                    speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}
                 }});
                 
-                video.addEventListener('loadeddata', () => {{
-                    isPlayerReady = true;
-                    player.play();
+                video.addEventListener('canplaythrough', function handler() {{
+                    video.removeEventListener('canplaythrough', handler);
+                    player.once('ready', () => {{
+                        isPlayerReady = true;
+                        setTimeout(() => player.play(), 200);
+                    }});
                 }});
             }}
         }}
         
-        // CORRECT Quality switching function (from research)
         function updateQuality(newQuality) {{
             if (!hls) return;
             
-            console.log('🎚️ Quality change:', newQuality);
-            
             if (newQuality === 0) {{
-                hls.currentLevel = -1; // AUTO
-                console.log('Set to AUTO quality');
+                hls.currentLevel = -1;
             }} else {{
                 hls.levels.forEach((level, index) => {{
                     if (level.height === newQuality) {{
                         hls.currentLevel = index;
-                        console.log(`Set to ${{newQuality}}p`);
                     }}
                 }});
             }}
