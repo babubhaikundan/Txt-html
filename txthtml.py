@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    Generates the final HTML with PROPER HLS quality switching and UI sync!
+    Generates the final HTML with PERFECT HLS quality switching (Research-based implementation)
     """
     content_html = ""
     if not structured_list:
@@ -120,13 +120,12 @@ def generate_html(file_name, structured_list):
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
         .plyr--volume {{display: none !important;}}
-        .plyr__controls {{pointer-events: auto !important;}}
     </style>
 </head>
 <body>
     <div class="header">{file_name}</div>
     <div class="main-container">
-        <div class="player-wrapper"><video id="player" playsinline controls></video></div>
+        <div class="player-wrapper"><video id="player" playsinline controls crossorigin></video></div>
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search..." onkeyup="filterContent()"></div>
         <div id="content-container">{content_html}</div>
     </div>
@@ -134,104 +133,75 @@ def generate_html(file_name, structured_list):
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        let player, hls;
+        let player = null;
+        let hls = null;
         let isPlayerReady = false;
         
         document.addEventListener('DOMContentLoaded', () => {{
-            // Empty initialization - player will be created when video is selected
             setupDoubleTapSeek();
         }});
         
+        // PROPER Double Tap Handler (Blocks fullscreen completely)
         function setupDoubleTapSeek() {{
             const playerWrapper = document.querySelector('.player-wrapper');
-            let lastTap = 0;
+            let lastTapTime = 0;
             
-            // Intercept all clicks on player wrapper
-            playerWrapper.addEventListener('click', (event) => {{
-                // Don't interfere with control buttons
-                if (event.target.closest('.plyr__controls') || 
-                    event.target.closest('button') || 
-                    event.target.closest('[role="button"]')) {{
-                    return; // Let Plyr handle it
-                }}
+            // Block native double-click fullscreen
+            playerWrapper.addEventListener('dblclick', (e) => {{
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            }}, {{ capture: true, passive: false }});
+            
+            // Custom tap handler
+            const handleTap = (e) => {{
+                // Ignore control clicks
+                if (e.target.closest('.plyr__controls, button, [data-plyr]')) return;
                 
-                const currentTime = new Date().getTime();
-                const tapLength = currentTime - lastTap;
+                const now = Date.now();
+                const timeDiff = now - lastTapTime;
                 
-                if (tapLength < 300 && tapLength > 0 && lastTap > 0) {{
-                    // Double tap detected - PREVENT FULLSCREEN
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
+                if (timeDiff > 0 && timeDiff < 300 && lastTapTime !== 0) {{
+                    // DOUBLE TAP!
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
                     
                     if (player && isPlayerReady) {{
                         const rect = playerWrapper.getBoundingClientRect();
-                        const clickX = event.clientX || event.touches[0].clientX;
-                        const halfWidth = rect.width / 2;
+                        const x = (e.clientX || e.changedTouches?.[0]?.clientX) - rect.left;
                         
-                        if (clickX < halfWidth) {{
+                        if (x < rect.width / 2) {{
                             player.rewind(10);
+                            console.log('⏪ -10s');
                         }} else {{
                             player.forward(10);
+                            console.log('⏩ +10s');
                         }}
                     }}
-                    
-                    lastTap = 0;
+                    lastTapTime = 0;
                     return false;
                 }}
-                
-                lastTap = currentTime;
-            }}, {{ capture: true }}); // Capture phase to intercept early
+                lastTapTime = now;
+            }};
             
-            // Also handle touch events for mobile
-            playerWrapper.addEventListener('touchend', (event) => {{
-                // Don't interfere with control buttons
-                if (event.target.closest('.plyr__controls') || 
-                    event.target.closest('button')) {{
-                    return;
-                }}
-                
-                const currentTime = new Date().getTime();
-                const tapLength = currentTime - lastTap;
-                
-                if (tapLength < 300 && tapLength > 0 && lastTap > 0) {{
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
-                    
-                    if (player && isPlayerReady) {{
-                        const rect = playerWrapper.getBoundingClientRect();
-                        const touchX = event.changedTouches[0].clientX;
-                        const halfWidth = rect.width / 2;
-                        
-                        if (touchX < halfWidth) {{
-                            player.rewind(10);
-                        }} else {{
-                            player.forward(10);
-                        }}
-                    }}
-                    
-                    lastTap = 0;
-                    return false;
-                }}
-                
-                lastTap = currentTime;
-            }}, {{ capture: true }});
+            playerWrapper.addEventListener('click', handleTap, {{ capture: true, passive: false }});
+            playerWrapper.addEventListener('touchend', handleTap, {{ capture: true, passive: false }});
         }}
         
         let currentlyPlaying = null;
         
+        // MAIN PLAY VIDEO FUNCTION (Research-based implementation)
         function playVideo(event, url, element) {{
             event.preventDefault();
             
-            if(currentlyPlaying) currentlyPlaying.classList.remove('playing');
+            if (currentlyPlaying) currentlyPlaying.classList.remove('playing');
             element.classList.add('playing');
             currentlyPlaying = element;
             
             const video = document.getElementById('player');
             isPlayerReady = false;
             
-            // Destroy previous instances
+            // Clean up previous instances
             if (player) {{
                 player.destroy();
                 player = null;
@@ -242,10 +212,10 @@ def generate_html(file_name, structured_list):
             }}
             
             if (url.includes('.m3u8')) {{
+                // HLS VIDEO
                 if (Hls.isSupported()) {{
-                    console.log('Loading HLS video:', url);
+                    console.log('🎬 Loading HLS:', url);
                     
-                    // Create HLS instance
                     hls = new Hls({{
                         enableWorker: true,
                         lowLatencyMode: true,
@@ -253,60 +223,94 @@ def generate_html(file_name, structured_list):
                     }});
                     
                     hls.loadSource(url);
-                    hls.attachMedia(video);
+                    hls.attachMedia(video); // IMPORTANT: Before MANIFEST_PARSED
                     
-                    // Wait for manifest to parse
-                    hls.on(Hls.Events.MANIFEST_PARSED, function () {{
-                        const availableQualities = hls.levels.map((l) => l.height);
-                        console.log('Available qualities:', availableQualities);
+                    // CRITICAL: Proper quality implementation from research
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {{
+                        const availableQualities = hls.levels.map(l => l.height);
+                        availableQualities.unshift(0); // Add AUTO option
                         
-                        // Create Plyr with quality options
-                        player = new Plyr(video, {{
+                        console.log('✅ Qualities:', availableQualities);
+                        
+                        // CORRECT way to add quality options (from StackOverflow)
+                        const defaultOptions = {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
-                            speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}},
+                            speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
                             quality: {{
-                                default: availableQualities[0],
+                                default: 0, // AUTO
                                 options: availableQualities,
-                                forced: true,
+                                forced: true, // CRITICAL!
                                 onChange: (quality) => updateQuality(quality)
                             }},
-                            clickToPlay: true
+                            i18n: {{
+                                qualityLabel: {{ 0: 'Auto' }}
+                            }},
+                            fullscreen: {{ enabled: true, fallback: true, iosNative: true }}
+                        }};
+                        
+                        // Create Plyr AFTER manifest parsed
+                        player = new Plyr(video, defaultOptions);
+                        
+                        // Wait for BOTH ready events
+                        let videoReady = false;
+                        let plyrReady = false;
+                        
+                        const startPlayback = () => {{
+                            if (videoReady && plyrReady) {{
+                                isPlayerReady = true;
+                                console.log('✅ Everything ready - playing');
+                                
+                                // Use requestAnimationFrame for smooth UI sync
+                                requestAnimationFrame(() => {{
+                                    player.play().catch(err => console.log('Autoplay:', err.message));
+                                }});
+                            }}
+                        }};
+                        
+                        video.addEventListener('loadeddata', function onLoad() {{
+                            video.removeEventListener('loadeddata', onLoad);
+                            videoReady = true;
+                            console.log('✅ Video data ready');
+                            startPlayback();
                         }});
                         
-                        console.log('Plyr created, waiting for canplay event');
+                        player.on('ready', () => {{
+                            plyrReady = true;
+                            console.log('✅ Plyr UI ready');
+                            startPlayback();
+                        }});
                         
-                        // CRITICAL: Wait for video to be fully ready before playing
-                        video.addEventListener('canplay', function onCanPlay() {{
-                            video.removeEventListener('canplay', onCanPlay);
-                            console.log('Video can play now');
-                            isPlayerReady = true;
-                            
-                            // Now play the video
-                            player.play().then(() => {{
-                                console.log('Video playing successfully');
-                            }}).catch(err => {{
-                                console.log('Autoplay prevented:', err);
-                            }});
+                        // Fullscreen orientation
+                        player.on('enterfullscreen', () => {{
+                            try {{
+                                if (screen.orientation?.lock) screen.orientation.lock('landscape');
+                                else if (screen.lockOrientation) screen.lockOrientation('landscape');
+                            }} catch(e) {{}}
+                        }});
+                        
+                        player.on('exitfullscreen', () => {{
+                            try {{
+                                if (screen.orientation?.unlock) screen.orientation.unlock();
+                                else if (screen.unlockOrientation) screen.unlockOrientation();
+                            }} catch(e) {{}}
                         }});
                     }});
                     
-                    // Error handling
-                    hls.on(Hls.Events.ERROR, function (event, data) {{
+                    // HLS Error handling
+                    hls.on(Hls.Events.ERROR, function(event, data) {{
                         if (data.fatal) {{
-                            console.error('Fatal HLS error:', data);
+                            console.error('❌ HLS Error:', data.type);
                             switch(data.type) {{
                                 case Hls.ErrorTypes.NETWORK_ERROR:
-                                    console.log('Network error, trying to recover');
                                     hls.startLoad();
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
-                                    console.log('Media error, trying to recover');
                                     hls.recoverMediaError();
                                     break;
                                 default:
                                     hls.destroy();
-                                    alert('Video loading failed. Please try again.');
+                                    alert('Video failed to load. Please try again.');
                                     break;
                             }}
                         }}
@@ -314,50 +318,60 @@ def generate_html(file_name, structured_list):
                     
                 }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
                     // Safari native HLS
+                    console.log('🍎 Safari HLS');
                     video.src = url;
+                    
                     player = new Plyr(video, {{
                         controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                         settings: ['speed'],
-                        speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}}
+                        speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
+                        fullscreen: {{ enabled: true, iosNative: true }}
                     }});
                     
-                    video.addEventListener('canplay', function onCanPlay() {{
-                        video.removeEventListener('canplay', onCanPlay);
+                    video.addEventListener('loadeddata', () => {{
                         isPlayerReady = true;
                         player.play();
                     }});
                 }}
             }} else {{
-                // Regular MP4 video
+                // Regular MP4
+                console.log('🎥 MP4 video');
                 video.src = url;
+                
                 player = new Plyr(video, {{
                     controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                     settings: ['speed'],
-                    speed: {{selected: 1, options: [0.5, 0.75, 1, 1.5, 2]}}
+                    speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
+                    fullscreen: {{ enabled: true, fallback: true }}
                 }});
                 
-                video.addEventListener('canplay', function onCanPlay() {{
-                    video.removeEventListener('canplay', onCanPlay);
+                video.addEventListener('loadeddata', () => {{
                     isPlayerReady = true;
                     player.play();
                 }});
             }}
         }}
         
+        // CORRECT Quality switching function (from research)
         function updateQuality(newQuality) {{
             if (!hls) return;
             
-            console.log('Switching to quality:', newQuality);
+            console.log('🎚️ Quality change:', newQuality);
             
-            hls.levels.forEach((level, levelIndex) => {{
-                if (level.height === newQuality) {{
-                    console.log('Setting quality level:', levelIndex, '-', level.height + 'p');
-                    hls.currentLevel = levelIndex;
-                }}
-            }});
+            if (newQuality === 0) {{
+                hls.currentLevel = -1; // AUTO
+                console.log('Set to AUTO quality');
+            }} else {{
+                hls.levels.forEach((level, index) => {{
+                    if (level.height === newQuality) {{
+                        hls.currentLevel = index;
+                        console.log(`Set to ${{newQuality}}p`);
+                    }}
+                }});
+            }}
         }}
         
-        // Accordion functionality
+        // Accordion
         document.querySelectorAll('.accordion-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 btn.classList.toggle('active');
@@ -366,7 +380,7 @@ def generate_html(file_name, structured_list):
             }});
         }});
         
-        // Search functionality
+        // Search
         function filterContent() {{
             const term = document.getElementById('searchInput').value.toLowerCase();
             document.querySelectorAll('.accordion-item').forEach(sub => {{
