@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    FINAL PERFECT SOLUTION - All issues fixed!
+    FINAL WORKING SOLUTION - Research-based fix for all issues
     """
     content_html = ""
     if not structured_list:
@@ -109,7 +109,6 @@ def generate_html(file_name, structured_list):
         .player-wrapper video {{pointer-events: none !important;}}
         .plyr {{pointer-events: auto !important;}}
         .plyr__controls {{pointer-events: auto !important;}}
-        .plyr__menu {{max-height: 300px; overflow-y: auto;}}
         .search-bar input {{width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px;}}
         .accordion-item {{margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
         .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative;}}
@@ -124,6 +123,8 @@ def generate_html(file_name, structured_list):
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
         .plyr--volume {{display: none !important;}}
+        .plyr__menu {{max-height: 250px !important; overflow-y: auto !important; bottom: 50px !important; top: auto !important;}}
+        .plyr__menu__container {{max-height: 220px !important; overflow-y: auto !important;}}
     </style>
 </head>
 <body>
@@ -144,6 +145,7 @@ def generate_html(file_name, structured_list):
         
         // Double tap variables
         let lastTapTime = 0;
+        let tapTimeout = null;
         
         document.addEventListener('DOMContentLoaded', () => {{
             video = document.getElementById('player');
@@ -151,10 +153,11 @@ def generate_html(file_name, structured_list):
             setupDoubleTapSeek();
         }});
         
-        // Double tap seek handler
+        // RESEARCH-BASED SOLUTION: Block fullscreen on video, allow on Plyr overlay
         function setupDoubleTapSeek() {{
-            // Desktop double click
+            // Plyr overlay ko double tap handle karega
             playerWrapper.addEventListener('dblclick', (e) => {{
+                // Only if NOT on controls
                 if (e.target.closest('.plyr__controls')) return;
                 
                 e.preventDefault();
@@ -166,8 +169,10 @@ def generate_html(file_name, structured_list):
                     
                     if (x < rect.width / 2) {{
                         player.rewind(10);
+                        console.log('⏪ -10s');
                     }} else {{
                         player.forward(10);
+                        console.log('⏩ +10s');
                     }}
                 }}
             }});
@@ -212,37 +217,20 @@ def generate_html(file_name, structured_list):
             
             isPlayerReady = false;
             
-            // CRITICAL: Proper cleanup (Research-based fix)
+            // Clean up
             if (player) {{
-                try {{
-                    player.stop();
-                    player.destroy();
-                }} catch(e) {{
-                    console.log('Player cleanup:', e.message);
-                }}
+                player.destroy();
                 player = null;
             }}
-            
             if (hls) {{
-                try {{
-                    hls.destroy();
-                }} catch(e) {{
-                    console.log('HLS cleanup:', e.message);
-                }}
+                hls.destroy();
                 hls = null;
             }}
             
-            // CRITICAL: Reset video element completely
-            video.removeAttribute('src');
+            // Remove any existing source
+            video.src = '';
             video.load();
             
-            // Small delay to ensure cleanup
-            setTimeout(() => {{
-                loadNewVideo(url);
-            }}, 100);
-        }}
-        
-        function loadNewVideo(url) {{
             if (url.includes('.m3u8')) {{
                 // HLS VIDEO
                 if (Hls.isSupported()) {{
@@ -262,7 +250,7 @@ def generate_html(file_name, structured_list):
                         
                         console.log('✅ Qualities:', availableQualities);
                         
-                        // Create fresh Plyr instance
+                        // Create Plyr AFTER manifest
                         player = new Plyr(video, {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
@@ -278,10 +266,17 @@ def generate_html(file_name, structured_list):
                             clickToPlay: true
                         }});
                         
+                        // CRITICAL FIX: Wait for Plyr 'ready' event (most reliable)
                         player.on('ready', () => {{
                             isPlayerReady = true;
-                            console.log('✅ Ready');
-                            player.play().catch(err => console.log('Play:', err.message));
+                            console.log('✅ Plyr ready');
+                            
+                            // Play immediately
+                            player.play().then(() => {{
+                                console.log('✅ Playing');
+                            }}).catch(err => {{
+                                console.log('Autoplay blocked:', err.message);
+                            }});
                         }});
                         
                         // Fullscreen orientation
