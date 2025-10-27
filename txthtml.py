@@ -58,7 +58,7 @@ def structure_data_in_order(urls):
 
 def generate_html(file_name, structured_list):
     """
-    FINAL WORKING SOLUTION - Research-based fix for all issues
+    FINAL WORKING SOLUTION - Research-based fixes for BOTH issues
     """
     content_html = ""
     if not structured_list:
@@ -105,10 +105,12 @@ def generate_html(file_name, structured_list):
         * {{margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;}}
         body {{background: var(--bg-color);}} .header {{background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold;}}
         .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto;}}
-        .player-wrapper {{background: #000; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000;}}
+        .player-wrapper {{background: #000; margin-bottom: 20px; border-radius: 12px; overflow: visible !important; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000;}}
         .player-wrapper video {{pointer-events: none !important;}}
-        .plyr {{pointer-events: auto !important;}}
+        .plyr {{pointer-events: auto !important; overflow: visible !important;}}
         .plyr__controls {{pointer-events: auto !important;}}
+        .plyr__menu {{z-index: 10000 !important; position: relative !important;}}
+        .plyr__menu__container {{max-height: 350px !important; overflow-y: auto !important; z-index: 10001 !important;}}
         .search-bar input {{width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px;}}
         .accordion-item {{margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
         .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative;}}
@@ -123,8 +125,6 @@ def generate_html(file_name, structured_list):
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
         .plyr--volume {{display: none !important;}}
-        .plyr__menu {{z-index: 10000 !important; position: relative !important;}}
-        .plyr__menu__container {{max-height: 350px !important; overflow-y: auto !important; z-index: 10001 !important;}}
     </style>
 </head>
 <body>
@@ -142,10 +142,8 @@ def generate_html(file_name, structured_list):
         let hls = null;
         let isPlayerReady = false;
         let playerWrapper, video;
-        
-        // Double tap variables
         let lastTapTime = 0;
-        let tapTimeout = null;
+        let pendingVideoUrl = null;
         
         document.addEventListener('DOMContentLoaded', () => {{
             video = document.getElementById('player');
@@ -153,11 +151,8 @@ def generate_html(file_name, structured_list):
             setupDoubleTapSeek();
         }});
         
-        // RESEARCH-BASED SOLUTION: Block fullscreen on video, allow on Plyr overlay
         function setupDoubleTapSeek() {{
-            // Plyr overlay ko double tap handle karega
             playerWrapper.addEventListener('dblclick', (e) => {{
-                // Only if NOT on controls
                 if (e.target.closest('.plyr__controls')) return;
                 
                 e.preventDefault();
@@ -177,7 +172,6 @@ def generate_html(file_name, structured_list):
                 }}
             }});
             
-            // Mobile touch
             playerWrapper.addEventListener('touchend', (e) => {{
                 if (e.target.closest('.plyr__controls')) return;
                 
@@ -216,20 +210,56 @@ def generate_html(file_name, structured_list):
             currentlyPlaying = element;
             
             isPlayerReady = false;
+            pendingVideoUrl = url;
             
-            // Clean up
-            if (player) {{
-                player.destroy();
-                player = null;
-            }}
+            console.log('🎬 Starting new video:', url);
+            
+            // CRITICAL: Proper cleanup based on research
             if (hls) {{
+                console.log('Cleaning up HLS');
+                
+                // Listen for MEDIA_DETACHED event before loading new video
+                hls.once(Hls.Events.MEDIA_DETACHED, function() {{
+                    console.log('✅ Media detached, loading new video');
+                    hls = null;
+                    
+                    // Now load the new video
+                    if (pendingVideoUrl) {{
+                        loadNewVideo(pendingVideoUrl);
+                        pendingVideoUrl = null;
+                    }}
+                }});
+                
+                // Remove all event listeners
+                hls.off(Hls.Events.MANIFEST_PARSED);
+                hls.off(Hls.Events.ERROR);
+                
+                // Destroy HLS (will trigger MEDIA_DETACHED)
                 hls.destroy();
-                hls = null;
+            }} else {{
+                // No HLS to clean up, load directly
+                if (player) {{
+                    console.log('Destroying Plyr');
+                    player.off('ready');
+                    player.off('enterfullscreen');
+                    player.off('exitfullscreen');
+                    player.destroy();
+                    player = null;
+                }}
+                
+                // Clear video element
+                video.removeAttribute('src');
+                video.load();
+                
+                setTimeout(() => {{
+                    loadNewVideo(url);
+                    pendingVideoUrl = null;
+                }}, 50);
             }}
-            
-            // Remove any existing source
-            video.src = '';
-            video.load();
+        }}
+        
+        function loadNewVideo(url) {{
+            console.log('📹 Loading video:', url);
             
             if (url.includes('.m3u8')) {{
                 // HLS VIDEO
@@ -250,7 +280,7 @@ def generate_html(file_name, structured_list):
                         
                         console.log('✅ Qualities:', availableQualities);
                         
-                        // Create Plyr AFTER manifest
+                        // Create Plyr
                         player = new Plyr(video, {{
                             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
                             settings: ['quality', 'speed'],
@@ -266,12 +296,11 @@ def generate_html(file_name, structured_list):
                             clickToPlay: true
                         }});
                         
-                        // CRITICAL FIX: Wait for Plyr 'ready' event (most reliable)
+                        // Wait for Plyr ready
                         player.on('ready', () => {{
                             isPlayerReady = true;
                             console.log('✅ Plyr ready');
                             
-                            // Play immediately
                             player.play().then(() => {{
                                 console.log('✅ Playing');
                             }}).catch(err => {{
@@ -304,7 +333,7 @@ def generate_html(file_name, structured_list):
                                     hls.recoverMediaError();
                                     break;
                                 default:
-                                    hls.destroy();
+                                    console.error('Fatal error');
                                     break;
                             }}
                         }}
