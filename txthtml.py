@@ -123,6 +123,8 @@ def generate_html(file_name, structured_list):
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
         .plyr--volume {{display: none !important;}}
+        .plyr__menu {{z-index: 10000 !important; position: relative !important;}}
+        .plyr__menu__container {{max-height: 350px !important; overflow-y: auto !important; z-index: 10001 !important;}}
     </style>
 </head>
 <body>
