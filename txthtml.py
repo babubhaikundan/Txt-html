@@ -59,53 +59,124 @@ def extract_topic(title):
 
 def structure_data_in_order(urls):
     """
-    Processes URLs sequentially to maintain their original order and groups them by subject.
+    Processes URLs with smart grouping by Subject → Topic → Lectures
     """
-    structured_list, subject_map, temp_map = [], {}, {}
+    structured_list = []
+    subject_map = {}
+    temp_map = {}
+    
+    # First pass: Collect all videos and PDFs for each unique name
     for name, url in urls:
-        if name not in temp_map: temp_map[name] = {"videos": [], "pdfs": []}
-        if ".pdf" in url.lower(): temp_map[name]["pdfs"].append(url)
-        else: temp_map[name]["videos"].append(url)
-            
+        if name not in temp_map:
+            temp_map[name] = {"videos": [], "pdfs": []}
+        if ".pdf" in url.lower():
+            temp_map[name]["pdfs"].append(url)
+        else:
+            temp_map[name]["videos"].append(url)
+    
+    # Second pass: Parse and organize by Subject → Topic → Lecture
     processed_names = set()
     for name, _ in urls:
-        if name in processed_names: continue
-        subject, title = parse_line(name)
+        if name in processed_names:
+            continue
+        
+        subject, topic, title = parse_line(name)
+        
+        # Create subject if doesn't exist
         if subject not in subject_map:
-            new_subject = {"name": subject, "lectures": []}
+            new_subject = {
+                "name": subject,
+                "topics": {}  # Topics will be organized here
+            }
             subject_map[subject] = new_subject
             structured_list.append(new_subject)
-        subject_map[subject]["lectures"].append({"title": title, **temp_map[name]})
+        
+        current_subject = subject_map[subject]
+        
+        # If there's a topic, group under it
+        if topic:
+            if topic not in current_subject["topics"]:
+                current_subject["topics"][topic] = {
+                    "name": topic,
+                    "lectures": []
+                }
+            
+            current_subject["topics"][topic]["lectures"].append({
+                "title": title,
+                "videos": temp_map[name]["videos"],
+                "pdfs": temp_map[name]["pdfs"]
+            })
+        else:
+            # No topic, add directly to subject as "direct lectures"
+            if "direct_lectures" not in current_subject:
+                current_subject["direct_lectures"] = []
+            
+            current_subject["direct_lectures"].append({
+                "title": title,
+                "videos": temp_map[name]["videos"],
+                "pdfs": temp_map[name]["pdfs"]
+            })
+        
         processed_names.add(name)
+    
     return structured_list
 
 def generate_html(file_name, structured_list):
     """
-    FINAL WORKING SOLUTION - Research-based fixes for BOTH issues
+    Generates HTML with nested structure: Subject → Topic → Lectures
     """
     content_html = ""
     if not structured_list:
         content_html = "<p class='text-center text-white'>No content found.</p>"
     else:
-        item_id_counter = 0
         for subject_data in structured_list:
-            subject_name, lectures = subject_data["name"], subject_data["lectures"]
-            lecture_html = ""
-            for lecture in lectures:
-                title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
-                video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, \'{url}\', this)"><i class="fa-solid fa-circle-play"></i> Play</a>' for url in videos)
-                pdf_links = "".join(f'<a href="{url}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>' for url in pdfs)
-                lecture_html += f"""
-                <div class="lecture-entry">
-                    <p class="lecture-title">{title}</p><div class="lecture-links">{video_links}{pdf_links}</div>
-                </div>"""
-            item_id = f"item{item_id_counter}"
+            subject_name = subject_data["name"]
+            subject_id = f"subject_{abs(hash(subject_name))}"
+            
+            # Build subject content
+            subject_content = ""
+            
+            # First add direct lectures (without topic grouping)
+            if "direct_lectures" in subject_data and subject_data["direct_lectures"]:
+                for lecture in subject_data["direct_lectures"]:
+                    title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
+                    video_links = "".join(f'''<a href="#" class="list-item video-item" onclick="playVideo(event, '{url}', this)"><i class="fa-solid fa-circle-play"></i> Play</a>''' for url in videos)
+                    pdf_links = "".join(f'''<a href="{url}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>''' for url in pdfs)
+                    subject_content += f"""
+                    <div class="lecture-entry">
+                        <p class="lecture-title">{title}</p><div class="lecture-links">{video_links}{pdf_links}</div>
+                    </div>"""
+            
+            # Then add topic-wise lectures
+            if "topics" in subject_data and subject_data["topics"]:
+                for topic_name, topic_data in subject_data["topics"].items():
+                    topic_id = f"topic_{abs(hash(topic_name))}"
+                    
+                    # Build lecture list for this topic
+                    lecture_html = ""
+                    for lecture in topic_data["lectures"]:
+                        title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
+                        video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, \'{url}\', this)"><i class="fa-solid fa-circle-play"></i> Play</a>' for url in videos)
+                        pdf_links = "".join(f'<a href="{url}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>' for url in pdfs)
+                        lecture_html += f"""
+                        <div class="lecture-entry">
+                            <p class="lecture-title">{title}</p><div class="lecture-links">{video_links}{pdf_links}</div>
+                        </div>"""
+                    
+                    # Add topic as nested accordion
+                    subject_content += f"""
+                    <div class="topic-accordion">
+                        <button class="topic-header">📁 {topic_name}</button>
+                        <div class="topic-content">{lecture_html}</div>
+                    </div>"""
+            
+            # Add subject accordion
             content_html += f"""
             <div class="accordion-item">
-                <button class="accordion-header">{subject_name}</button><div class="accordion-content">{lecture_html}</div>
+                <button class="accordion-header">{subject_name}</button>
+                <div class="accordion-content">{subject_content}</div>
             </div>"""
-            item_id_counter += 1
-
+    
     new_footer = """
     <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
         <a href="https://babubhaikundan.blogspot.com" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; background: #222; padding: 8px 16px; border-radius: 20px; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
@@ -140,6 +211,11 @@ def generate_html(file_name, structured_list):
         .accordion-header:after {{content: '+'; font-size: 24px; position: absolute; right: 20px; color: #888; transition: transform 0.3s ease;}}
         .accordion-header.active:after {{transform: rotate(45deg);}}
         .accordion-content {{padding: 0 20px; max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out;}}
+        .topic-accordion {{margin: 10px 0; border-left: 3px solid #00b3ff; padding-left: 10px;}}
+        .topic-header {{width: 100%; background: #f8f9fa; border: none; text-align: left; padding: 12px 15px; font-size: 16px; font-weight: 600; cursor: pointer; border-radius: 6px; color: #333; transition: all 0.2s ease;}}
+        .topic-header:hover {{background: #e9ecef;}}
+        .topic-header.active {{background: #00b3ff; color: white;}}
+        .topic-content {{padding: 10px 0; max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out;}}
         .lecture-entry {{padding: 15px 0; border-bottom: 1px solid #f0f0f0;}} .lecture-entry:last-child {{border-bottom: none;}}
         .lecture-title {{font-weight: 600; margin-bottom: 12px; color: #333;}} .lecture-links {{display: flex; flex-wrap: wrap; gap: 10px;}}
         .list-item {{display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 20px; text-decoration: none; font-weight: 500; transition: all 0.2s ease; cursor: pointer;}}
@@ -406,12 +482,30 @@ def generate_html(file_name, structured_list):
             }}
         }}
         
-        // Accordion
+        // Accordion (Subject level)
         document.querySelectorAll('.accordion-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 btn.classList.toggle('active');
                 const content = btn.nextElementSibling;
                 content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + 'px';
+            }});
+        }});
+        
+        // Topic Accordion (Nested level)
+        document.querySelectorAll('.topic-header').forEach(btn => {{
+            btn.addEventListener('click', () => {{
+                btn.classList.toggle('active');
+                const content = btn.nextElementSibling;
+                if (content.style.maxHeight) {{
+                    content.style.maxHeight = null;
+                }} else {{
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    // Also expand parent if collapsed
+                    const parentContent = btn.closest('.accordion-content');
+                    if (parentContent && !parentContent.style.maxHeight) {{
+                        parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
+                    }}
+                }}
             }});
         }});
         
