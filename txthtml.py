@@ -148,8 +148,9 @@ def generate_html(file_name, structured_list):
             
             content_html += f'<div class="accordion-item"><button class="accordion-header">{html.escape(subject_name)}</button><div class="accordion-content">{subject_content}</div></div>'
     
-    new_footer = """
-    <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+    # Footer content is now separated for clarity
+    footer_content = """
+    <div style="text-align: center;">
         <a href="https://babubhaikundan.blogspot.com" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; background: #222; padding: 8px 16px; border-radius: 20px; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
             <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" style="width: 20px; height: 20px;">
             <span style="color: #00ffc8; font-weight: bold; font-size: 15px;">Developer💀:-</span>
@@ -168,8 +169,12 @@ def generate_html(file_name, structured_list):
     <style>
         :root {{--plyr-color-main: #00b3ff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c;}}
         * {{margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;}}
-        body {{background: var(--bg-color);}} .header {{background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold;}}
-        .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto; padding-bottom: 100px; /* NEW: Added padding to prevent footer from hiding content */}}
+        body {{
+            background: var(--bg-color);
+            padding-bottom: 90px; /* IMPORTANT: Space for the fixed footer */
+        }}
+        .header {{background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold;}}
+        .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto;}}
         .player-wrapper {{background: #000; margin-bottom: 20px; border-radius: 12px; overflow: visible !important; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000;}}
         .player-wrapper video {{pointer-events: none !important;}}
         .plyr {{pointer-events: auto !important; overflow: visible !important;}}
@@ -195,6 +200,18 @@ def generate_html(file_name, structured_list):
         .pdf-item {{background-color: #fff0e9; color: #d84315; border: 1px solid #ffd0b3;}}
         .pdf-item:hover {{background-color: #ff5722; color: white; border-color: #ff5722;}}
         .plyr--volume {{display: none !important;}}
+        /* --- NEW FIXED FOOTER STYLE --- */
+        .footer {{
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            background-color: var(--bg-color);
+            padding: 15px 0;
+            border-top: 1px solid #ddd;
+            z-index: 1001;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }}
     </style>
 </head>
 <body>
@@ -204,7 +221,7 @@ def generate_html(file_name, structured_list):
         <div class="search-bar"><input type="text" id="searchInput" placeholder="Search..." onkeyup="filterContent()"></div>
         <div id="content-container">{content_html}</div>
     </div>
-    {new_footer}
+    <div class="footer">{footer_content}</div>
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
@@ -216,22 +233,16 @@ def generate_html(file_name, structured_list):
         function loadNewVideo(url) {{ if (url.includes('.m3u8')) {{ if (Hls.isSupported()) {{ hls = new Hls(); hls.loadSource(url); hls.attachMedia(video); hls.on(Hls.Events.MANIFEST_PARSED, function() {{ const availableQualities = hls.levels.map(l => l.height); availableQualities.unshift(0); player = new Plyr(video, {{ controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'], settings: ['quality', 'speed'], speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}, quality: {{ default: 0, options: availableQualities, forced: true, onChange: (quality) => updateQuality(quality) }}, i18n: {{ qualityLabel: {{ 0: 'Auto' }} }}, fullscreen: {{ enabled: true, fallback: true, iosNative: true }}, clickToPlay: true }}); player.on('ready', () => {{ isPlayerReady = true; player.play().catch(err => console.log('Autoplay blocked:', err.message)); }}); player.on('enterfullscreen', () => {{ try {{ if(screen.orientation?.lock) screen.orientation.lock('landscape'); }} catch (e) {{}} }}); player.on('exitfullscreen', () => {{ try {{ if(screen.orientation?.unlock) screen.orientation.unlock(); }} catch (e) {{}} }}); }}); hls.on(Hls.Events.ERROR, function(event, data) {{ if (data.fatal) {{ switch(data.type) {{ case Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break; case Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break; default: break; }} }} }}); }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{ video.src = url; player = new Plyr(video, {{ settings: ['speed'] }}); player.on('ready', () => {{ isPlayerReady = true; player.play(); }}); }} }} else {{ video.src = url; player = new Plyr(video, {{ settings: ['speed'] }}); player.on('ready', () => {{ isPlayerReady = true; player.play(); }}); }} }}
         function updateQuality(newQuality) {{ if (!hls) return; if (newQuality === 0) {{ hls.currentLevel = -1; }} else {{ hls.levels.forEach((level, index) => {{ if (level.height === newQuality) {{ hls.currentLevel = index; }} }}); }} }}
         
-        // --- UPDATED ACCORDION LOGIC ---
-        
         // Accordion (Subject level)
         document.querySelectorAll('.accordion-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 const isAlreadyActive = btn.classList.contains('active');
-                
-                // Close all other subjects
                 document.querySelectorAll('.accordion-header').forEach(otherBtn => {{
                     if (otherBtn !== btn) {{
                         otherBtn.classList.remove('active');
                         otherBtn.nextElementSibling.style.maxHeight = null;
                     }}
                 }});
-
-                // Toggle the clicked subject
                 if (!isAlreadyActive) {{
                     btn.classList.add('active');
                     const content = btn.nextElementSibling;
@@ -248,16 +259,12 @@ def generate_html(file_name, structured_list):
             btn.addEventListener('click', () => {{
                 const isAlreadyActive = btn.classList.contains('active');
                 const parentContent = btn.closest('.accordion-content');
-
-                // Close all other topics within the same subject
                 parentContent.querySelectorAll('.topic-header').forEach(otherBtn => {{
                      if (otherBtn !== btn) {{
                         otherBtn.classList.remove('active');
                         otherBtn.nextElementSibling.style.maxHeight = null;
                     }}
                 }});
-
-                // Toggle the clicked topic
                 const content = btn.nextElementSibling;
                 if (!isAlreadyActive) {{
                     btn.classList.add('active');
@@ -266,14 +273,10 @@ def generate_html(file_name, structured_list):
                     btn.classList.remove('active');
                     content.style.maxHeight = null;
                 }}
-
-                // Adjust parent height after toggling
                 parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
             }});
         }});
         
-        // --- END OF UPDATED LOGIC ---
-
         function filterContent() {{
             const term = document.getElementById('searchInput').value.toLowerCase();
             document.querySelectorAll('.accordion-item').forEach(sub => {{
