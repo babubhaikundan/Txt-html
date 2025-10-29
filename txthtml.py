@@ -47,17 +47,21 @@ def parse_line(name):
         return subject, topic, title
     
     # Rule 5: Default (Jab kuch match na ho)
-    return "General", None, name
+    # UPDATED: We now assign a topic even in the default case if possible.
+    topic = extract_topic(name)
+    return "General", topic, name
 
 def extract_topic(title):
     """
     Extract topic name from title by removing numbering patterns like #1, #2, etc.
-    Returns base topic name without numbers
+    Returns base topic name without numbers.
     """
     # Remove patterns like #1, #2, #8, etc. at the end
     topic = re.sub(r'\s*#\d+\s*$', '', title).strip()
-    # If topic is different from title, return it, else None
-    return topic if topic != title else None
+    # PREVIOUSLY: return topic if topic != title else None
+    # UPDATED LOGIC: Always return the base name as the topic.
+    # This ensures "Lecture 1" and "Lecture" both go into the "Lecture" topic group.
+    return topic
 
 def structure_data_in_order(urls):
     """
@@ -96,6 +100,7 @@ def structure_data_in_order(urls):
         current_subject = subject_map[subject]
         
         # If there's a topic, group under it
+        # With the new logic, 'topic' should always exist.
         if topic:
             if topic not in current_subject["topics"]:
                 current_subject["topics"][topic] = {
@@ -109,7 +114,7 @@ def structure_data_in_order(urls):
                 "pdfs": temp_map[name]["pdfs"]
             })
         else:
-            # No topic, add directly to subject as "direct lectures"
+            # This 'else' block is now less likely to be used but kept for safety.
             if "direct_lectures" not in current_subject:
                 current_subject["direct_lectures"] = []
             
@@ -160,11 +165,15 @@ def generate_html(file_name, structured_list):
             
             # Then add topic-wise lectures
             if "topics" in subject_data and subject_data["topics"]:
-                for topic_name, topic_data in subject_data["topics"].items():
+                # Sort topics alphabetically for consistent order
+                sorted_topics = sorted(subject_data["topics"].items())
+                for topic_name, topic_data in sorted_topics:
                     
                     # Build lecture list for this topic
                     lecture_html = ""
-                    for lecture in topic_data["lectures"]:
+                    # Optional: Sort lectures within a topic if needed (e.g., by title)
+                    sorted_lectures = sorted(topic_data["lectures"], key=lambda x: x['title'])
+                    for lecture in sorted_lectures:
                         title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
                         
                         # PROPER quote escaping
@@ -533,11 +542,25 @@ def generate_html(file_name, structured_list):
             const term = document.getElementById('searchInput').value.toLowerCase();
             document.querySelectorAll('.accordion-item').forEach(sub => {{
                 let hasMatch = false;
+                // Search in direct lectures
                 sub.querySelectorAll('.lecture-entry').forEach(lec => {{
                     const match = lec.querySelector('.lecture-title').textContent.toLowerCase().includes(term);
                     lec.style.display = match ? '' : 'none';
                     if(match) hasMatch = true;
                 }});
+                
+                // Search in topics
+                sub.querySelectorAll('.topic-accordion').forEach(topic => {{
+                    let topicHasMatch = false;
+                    topic.querySelectorAll('.lecture-entry').forEach(lec => {{
+                         const match = lec.querySelector('.lecture-title').textContent.toLowerCase().includes(term);
+                         lec.style.display = match ? '' : 'none';
+                         if(match) topicHasMatch = true;
+                    }});
+                    topic.style.display = topicHasMatch ? '' : 'none';
+                    if(topicHasMatch) hasMatch = true;
+                }});
+                
                 sub.style.display = hasMatch ? '' : 'none';
             }});
         }}
