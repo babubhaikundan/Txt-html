@@ -47,7 +47,6 @@ def parse_line(name):
         return subject, topic, title
     
     # Rule 5: Default (Jab kuch match na ho)
-    # UPDATED: We now assign a topic even in the default case if possible.
     topic = extract_topic(name)
     return "General", topic, name
 
@@ -56,11 +55,7 @@ def extract_topic(title):
     Extract topic name from title by removing numbering patterns like #1, #2, etc.
     Returns base topic name without numbers.
     """
-    # Remove patterns like #1, #2, #8, etc. at the end
     topic = re.sub(r'\s*#\d+\s*$', '', title).strip()
-    # PREVIOUSLY: return topic if topic != title else None
-    # UPDATED LOGIC: Always return the base name as the topic.
-    # This ensures "Lecture 1" and "Lecture" both go into the "Lecture" topic group.
     return topic
 
 def structure_data_in_order(urls):
@@ -88,25 +83,16 @@ def structure_data_in_order(urls):
         
         subject, topic, title = parse_line(name)
         
-        # Create subject if doesn't exist
         if subject not in subject_map:
-            new_subject = {
-                "name": subject,
-                "topics": {}  # Topics will be organized here
-            }
+            new_subject = {"name": subject, "topics": {}}
             subject_map[subject] = new_subject
             structured_list.append(new_subject)
         
         current_subject = subject_map[subject]
         
-        # If there's a topic, group under it
-        # With the new logic, 'topic' should always exist.
         if topic:
             if topic not in current_subject["topics"]:
-                current_subject["topics"][topic] = {
-                    "name": topic,
-                    "lectures": []
-                }
+                current_subject["topics"][topic] = {"name": topic, "lectures": []}
             
             current_subject["topics"][topic]["lectures"].append({
                 "title": title,
@@ -114,7 +100,6 @@ def structure_data_in_order(urls):
                 "pdfs": temp_map[name]["pdfs"]
             })
         else:
-            # This 'else' block is now less likely to be used but kept for safety.
             if "direct_lectures" not in current_subject:
                 current_subject["direct_lectures"] = []
             
@@ -139,71 +124,29 @@ def generate_html(file_name, structured_list):
     else:
         for subject_data in structured_list:
             subject_name = subject_data["name"]
-            
-            # Build subject content
             subject_content = ""
             
-            # First add direct lectures (without topic grouping)
             if "direct_lectures" in subject_data and subject_data["direct_lectures"]:
                 for lecture in subject_data["direct_lectures"]:
                     title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
-                    
-                    # PROPER quote escaping using html.escape
-                    video_links = "".join(
-                        f'<a href="#" class="list-item video-item" onclick="playVideo(event, {html.escape(repr(url), quote=True)}, this)"><i class="fa-solid fa-circle-play"></i> Play</a>'
-                        for url in videos
-                    )
-                    pdf_links = "".join(
-                        f'<a href="{html.escape(url, quote=True)}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>'
-                        for url in pdfs
-                    )
-                    
-                    subject_content += f"""
-                    <div class="lecture-entry">
-                        <p class="lecture-title">{html.escape(title)}</p><div class="lecture-links">{video_links}{pdf_links}</div>
-                    </div>"""
+                    video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, {html.escape(repr(url), quote=True)}, this)"><i class="fa-solid fa-circle-play"></i> Play</a>' for url in videos)
+                    pdf_links = "".join(f'<a href="{html.escape(url, quote=True)}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>' for url in pdfs)
+                    subject_content += f'<div class="lecture-entry"><p class="lecture-title">{html.escape(title)}</p><div class="lecture-links">{video_links}{pdf_links}</div></div>'
             
-            # Then add topic-wise lectures
             if "topics" in subject_data and subject_data["topics"]:
-                # Sort topics alphabetically for consistent order
                 sorted_topics = sorted(subject_data["topics"].items())
                 for topic_name, topic_data in sorted_topics:
-                    
-                    # Build lecture list for this topic
                     lecture_html = ""
-                    # Optional: Sort lectures within a topic if needed (e.g., by title)
                     sorted_lectures = sorted(topic_data["lectures"], key=lambda x: x['title'])
                     for lecture in sorted_lectures:
                         title, videos, pdfs = lecture["title"], lecture["videos"], lecture["pdfs"]
-                        
-                        # PROPER quote escaping
-                        video_links = "".join(
-                            f'<a href="#" class="list-item video-item" onclick="playVideo(event, {html.escape(repr(url), quote=True)}, this)"><i class="fa-solid fa-circle-play"></i> Play</a>'
-                            for url in videos
-                        )
-                        pdf_links = "".join(
-                            f'<a href="{html.escape(url, quote=True)}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>'
-                            for url in pdfs
-                        )
-                        
-                        lecture_html += f"""
-                        <div class="lecture-entry">
-                            <p class="lecture-title">{html.escape(title)}</p><div class="lecture-links">{video_links}{pdf_links}</div>
-                        </div>"""
+                        video_links = "".join(f'<a href="#" class="list-item video-item" onclick="playVideo(event, {html.escape(repr(url), quote=True)}, this)"><i class="fa-solid fa-circle-play"></i> Play</a>' for url in videos)
+                        pdf_links = "".join(f'<a href="{html.escape(url, quote=True)}" target="_blank" class="list-item pdf-item"><i class="fa-solid fa-file-pdf"></i> PDF</a>' for url in pdfs)
+                        lecture_html += f'<div class="lecture-entry"><p class="lecture-title">{html.escape(title)}</p><div class="lecture-links">{video_links}{pdf_links}</div></div>'
                     
-                    # Add topic as nested accordion
-                    subject_content += f"""
-                    <div class="topic-accordion">
-                        <button class="topic-header">📁 {html.escape(topic_name)}</button>
-                        <div class="topic-content">{lecture_html}</div>
-                    </div>"""
+                    subject_content += f'<div class="topic-accordion"><button class="topic-header">📁 {html.escape(topic_name)}</button><div class="topic-content">{lecture_html}</div></div>'
             
-            # Add subject accordion
-            content_html += f"""
-            <div class="accordion-item">
-                <button class="accordion-header">{html.escape(subject_name)}</button>
-                <div class="accordion-content">{subject_content}</div>
-            </div>"""
+            content_html += f'<div class="accordion-item"><button class="accordion-header">{html.escape(subject_name)}</button><div class="accordion-content">{subject_content}</div></div>'
     
     new_footer = """
     <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
@@ -226,7 +169,7 @@ def generate_html(file_name, structured_list):
         :root {{--plyr-color-main: #00b3ff; --bg-color: #f4f7f9; --card-bg: #ffffff; --header-bg: #1c1c1c;}}
         * {{margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;}}
         body {{background: var(--bg-color);}} .header {{background: var(--header-bg); color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold;}}
-        .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto;}}
+        .main-container {{padding: 15px; max-width: 1200px; margin: 0 auto; padding-bottom: 100px; /* NEW: Added padding to prevent footer from hiding content */}}
         .player-wrapper {{background: #000; margin-bottom: 20px; border-radius: 12px; overflow: visible !important; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: sticky; top: 10px; z-index: 1000;}}
         .player-wrapper video {{pointer-events: none !important;}}
         .plyr {{pointer-events: auto !important; overflow: visible !important;}}
@@ -265,302 +208,82 @@ def generate_html(file_name, structured_list):
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        let player = null;
-        let hls = null;
-        let isPlayerReady = false;
-        let playerWrapper, video;
-        let lastTapTime = 0;
-        let pendingVideoUrl = null;
-        
-        document.addEventListener('DOMContentLoaded', () => {{
-            video = document.getElementById('player');
-            playerWrapper = document.querySelector('.player-wrapper');
-            setupDoubleTapSeek();
-        }});
-        
-        function setupDoubleTapSeek() {{
-            playerWrapper.addEventListener('dblclick', (e) => {{
-                if (e.target.closest('.plyr__controls')) return;
-                
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                
-                if (player && isPlayerReady) {{
-                    const rect = playerWrapper.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    
-                    if (x < rect.width / 2) {{
-                        player.rewind(10);
-                        console.log('⏪ -10s');
-                    }} else {{
-                        player.forward(10);
-                        console.log('⏩ +10s');
-                    }}
-                }}
-            }});
-            
-            playerWrapper.addEventListener('touchend', (e) => {{
-                if (e.target.closest('.plyr__controls')) return;
-                
-                const now = Date.now();
-                const diff = now - lastTapTime;
-                
-                if (diff > 0 && diff < 300 && lastTapTime > 0) {{
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    
-                    if (player && isPlayerReady) {{
-                        const rect = playerWrapper.getBoundingClientRect();
-                        const x = e.changedTouches[0].clientX - rect.left;
-                        
-                        if (x < rect.width / 2) {{
-                            player.rewind(10);
-                        }} else {{
-                            player.forward(10);
-                        }}
-                    }}
-                    lastTapTime = 0;
-                }} else {{
-                    lastTapTime = now;
-                    setTimeout(() => lastTapTime = 0, 300);
-                }}
-            }});
-        }}
-        
+        let player = null; let hls = null; let isPlayerReady = false; let playerWrapper, video; let lastTapTime = 0; let pendingVideoUrl = null;
+        document.addEventListener('DOMContentLoaded', () => {{ video = document.getElementById('player'); playerWrapper = document.querySelector('.player-wrapper'); setupDoubleTapSeek(); }});
+        function setupDoubleTapSeek() {{ playerWrapper.addEventListener('dblclick', (e) => {{ if (e.target.closest('.plyr__controls')) return; e.preventDefault(); e.stopImmediatePropagation(); if (player && isPlayerReady) {{ const rect = playerWrapper.getBoundingClientRect(); const x = e.clientX - rect.left; if (x < rect.width / 2) {{ player.rewind(10); }} else {{ player.forward(10); }} }} }}); playerWrapper.addEventListener('touchend', (e) => {{ if (e.target.closest('.plyr__controls')) return; const now = Date.now(); const diff = now - lastTapTime; if (diff > 0 && diff < 300 && lastTapTime > 0) {{ e.preventDefault(); e.stopImmediatePropagation(); if (player && isPlayerReady) {{ const rect = playerWrapper.getBoundingClientRect(); const x = e.changedTouches[0].clientX - rect.left; if (x < rect.width / 2) {{ player.rewind(10); }} else {{ player.forward(10); }} }} lastTapTime = 0; }} else {{ lastTapTime = now; setTimeout(() => lastTapTime = 0, 300); }} }}); }}
         let currentlyPlaying = null;
+        function playVideo(event, url, element) {{ event.preventDefault(); if (currentlyPlaying) currentlyPlaying.classList.remove('playing'); element.classList.add('playing'); currentlyPlaying = element; isPlayerReady = false; pendingVideoUrl = url; if (hls) {{ hls.once(Hls.Events.MEDIA_DETACHED, function() {{ hls = null; if (pendingVideoUrl) {{ loadNewVideo(pendingVideoUrl); pendingVideoUrl = null; }} }}); hls.destroy(); }} else {{ if (player) {{ player.destroy(); player = null; }} video.removeAttribute('src'); video.load(); setTimeout(() => {{ loadNewVideo(url); pendingVideoUrl = null; }}, 50); }} }}
+        function loadNewVideo(url) {{ if (url.includes('.m3u8')) {{ if (Hls.isSupported()) {{ hls = new Hls(); hls.loadSource(url); hls.attachMedia(video); hls.on(Hls.Events.MANIFEST_PARSED, function() {{ const availableQualities = hls.levels.map(l => l.height); availableQualities.unshift(0); player = new Plyr(video, {{ controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'], settings: ['quality', 'speed'], speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}, quality: {{ default: 0, options: availableQualities, forced: true, onChange: (quality) => updateQuality(quality) }}, i18n: {{ qualityLabel: {{ 0: 'Auto' }} }}, fullscreen: {{ enabled: true, fallback: true, iosNative: true }}, clickToPlay: true }}); player.on('ready', () => {{ isPlayerReady = true; player.play().catch(err => console.log('Autoplay blocked:', err.message)); }}); player.on('enterfullscreen', () => {{ try {{ if(screen.orientation?.lock) screen.orientation.lock('landscape'); }} catch (e) {{}} }}); player.on('exitfullscreen', () => {{ try {{ if(screen.orientation?.unlock) screen.orientation.unlock(); }} catch (e) {{}} }}); }}); hls.on(Hls.Events.ERROR, function(event, data) {{ if (data.fatal) {{ switch(data.type) {{ case Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break; case Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break; default: break; }} }} }}); }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{ video.src = url; player = new Plyr(video, {{ settings: ['speed'] }}); player.on('ready', () => {{ isPlayerReady = true; player.play(); }}); }} }} else {{ video.src = url; player = new Plyr(video, {{ settings: ['speed'] }}); player.on('ready', () => {{ isPlayerReady = true; player.play(); }}); }} }}
+        function updateQuality(newQuality) {{ if (!hls) return; if (newQuality === 0) {{ hls.currentLevel = -1; }} else {{ hls.levels.forEach((level, index) => {{ if (level.height === newQuality) {{ hls.currentLevel = index; }} }}); }} }}
         
-        function playVideo(event, url, element) {{
-            event.preventDefault();
-            
-            if (currentlyPlaying) currentlyPlaying.classList.remove('playing');
-            element.classList.add('playing');
-            currentlyPlaying = element;
-            
-            isPlayerReady = false;
-            pendingVideoUrl = url;
-            
-            console.log('🎬 Starting new video:', url);
-            
-            // CRITICAL: Proper cleanup based on research
-            if (hls) {{
-                console.log('Cleaning up HLS');
-                
-                // Listen for MEDIA_DETACHED event before loading new video
-                hls.once(Hls.Events.MEDIA_DETACHED, function() {{
-                    console.log('✅ Media detached, loading new video');
-                    hls = null;
-                    
-                    // Now load the new video
-                    if (pendingVideoUrl) {{
-                        loadNewVideo(pendingVideoUrl);
-                        pendingVideoUrl = null;
-                    }}
-                }});
-                
-                // Remove all event listeners
-                hls.off(Hls.Events.MANIFEST_PARSED);
-                hls.off(Hls.Events.ERROR);
-                
-                // Destroy HLS (will trigger MEDIA_DETACHED)
-                hls.destroy();
-            }} else {{
-                // No HLS to clean up, load directly
-                if (player) {{
-                    console.log('Destroying Plyr');
-                    player.off('ready');
-                    player.off('enterfullscreen');
-                    player.off('exitfullscreen');
-                    player.destroy();
-                    player = null;
-                }}
-                
-                // Clear video element
-                video.removeAttribute('src');
-                video.load();
-                
-                setTimeout(() => {{
-                    loadNewVideo(url);
-                    pendingVideoUrl = null;
-                }}, 50);
-            }}
-        }}
-        
-        function loadNewVideo(url) {{
-            console.log('📹 Loading video:', url);
-            
-            if (url.includes('.m3u8')) {{
-                // HLS VIDEO
-                if (Hls.isSupported()) {{
-                    console.log('🎬 Loading HLS');
-                    
-                    hls = new Hls({{
-                        enableWorker: true,
-                        maxBufferLength: 30
-                    }});
-                    
-                    hls.loadSource(url);
-                    hls.attachMedia(video);
-                    
-                    hls.on(Hls.Events.MANIFEST_PARSED, function() {{
-                        const availableQualities = hls.levels.map(l => l.height);
-                        availableQualities.unshift(0);
-                        
-                        console.log('✅ Qualities:', availableQualities);
-                        
-                        // Create Plyr
-                        player = new Plyr(video, {{
-                            controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
-                            settings: ['quality', 'speed'],
-                            speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }},
-                            quality: {{
-                                default: 0,
-                                options: availableQualities,
-                                forced: true,
-                                onChange: (quality) => updateQuality(quality)
-                            }},
-                            i18n: {{ qualityLabel: {{ 0: 'Auto' }} }},
-                            fullscreen: {{ enabled: true, fallback: true, iosNative: true }},
-                            clickToPlay: true
-                        }});
-                        
-                        // Wait for Plyr ready
-                        player.on('ready', () => {{
-                            isPlayerReady = true;
-                            console.log('✅ Plyr ready');
-                            
-                            player.play().then(() => {{
-                                console.log('✅ Playing');
-                            }}).catch(err => {{
-                                console.log('Autoplay blocked:', err.message);
-                            }});
-                        }});
-                        
-                        // Fullscreen orientation
-                        player.on('enterfullscreen', () => {{
-                            try {{
-                                if (screen.orientation?.lock) screen.orientation.lock('landscape');
-                            }} catch(e) {{}}
-                        }});
-                        
-                        player.on('exitfullscreen', () => {{
-                            try {{
-                                if (screen.orientation?.unlock) screen.orientation.unlock();
-                            }} catch(e) {{}}
-                        }});
-                    }});
-                    
-                    hls.on(Hls.Events.ERROR, function(event, data) {{
-                        if (data.fatal) {{
-                            console.error('❌ HLS Error:', data.type);
-                            switch(data.type) {{
-                                case Hls.ErrorTypes.NETWORK_ERROR:
-                                    hls.startLoad();
-                                    break;
-                                case Hls.ErrorTypes.MEDIA_ERROR:
-                                    hls.recoverMediaError();
-                                    break;
-                                default:
-                                    console.error('Fatal error');
-                                    break;
-                            }}
-                        }}
-                    }});
-                    
-                }} else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
-                    // Safari
-                    video.src = url;
-                    player = new Plyr(video, {{
-                        controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
-                        settings: ['speed'],
-                        speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}
-                    }});
-                    
-                    player.on('ready', () => {{
-                        isPlayerReady = true;
-                        player.play();
-                    }});
-                }}
-            }} else {{
-                // MP4
-                video.src = url;
-                player = new Plyr(video, {{
-                    controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'settings', 'pip', 'fullscreen'],
-                    settings: ['speed'],
-                    speed: {{ selected: 1, options: [0.5, 0.75, 1, 1.5, 2] }}
-                }});
-                
-                player.on('ready', () => {{
-                    isPlayerReady = true;
-                    player.play();
-                }});
-            }}
-        }}
-        
-        function updateQuality(newQuality) {{
-            if (!hls) return;
-            
-            if (newQuality === 0) {{
-                hls.currentLevel = -1;
-            }} else {{
-                hls.levels.forEach((level, index) => {{
-                    if (level.height === newQuality) {{
-                        hls.currentLevel = index;
-                    }}
-                }});
-            }}
-        }}
+        // --- UPDATED ACCORDION LOGIC ---
         
         // Accordion (Subject level)
         document.querySelectorAll('.accordion-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
-                btn.classList.toggle('active');
-                const content = btn.nextElementSibling;
-                content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + 'px';
+                const isAlreadyActive = btn.classList.contains('active');
+                
+                // Close all other subjects
+                document.querySelectorAll('.accordion-header').forEach(otherBtn => {{
+                    if (otherBtn !== btn) {{
+                        otherBtn.classList.remove('active');
+                        otherBtn.nextElementSibling.style.maxHeight = null;
+                    }}
+                }});
+
+                // Toggle the clicked subject
+                if (!isAlreadyActive) {{
+                    btn.classList.add('active');
+                    const content = btn.nextElementSibling;
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }} else {{
+                    btn.classList.remove('active');
+                    btn.nextElementSibling.style.maxHeight = null;
+                }}
             }});
         }});
         
         // Topic Accordion (Nested level)
         document.querySelectorAll('.topic-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
-                btn.classList.toggle('active');
-                const content = btn.nextElementSibling;
-                if (content.style.maxHeight) {{
-                    content.style.maxHeight = null;
-                }} else {{
-                    content.style.maxHeight = content.scrollHeight + 'px';
-                    // Also expand parent if collapsed
-                    const parentContent = btn.closest('.accordion-content');
-                    if (parentContent && !parentContent.style.maxHeight) {{
-                        parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
+                const isAlreadyActive = btn.classList.contains('active');
+                const parentContent = btn.closest('.accordion-content');
+
+                // Close all other topics within the same subject
+                parentContent.querySelectorAll('.topic-header').forEach(otherBtn => {{
+                     if (otherBtn !== btn) {{
+                        otherBtn.classList.remove('active');
+                        otherBtn.nextElementSibling.style.maxHeight = null;
                     }}
+                }});
+
+                // Toggle the clicked topic
+                const content = btn.nextElementSibling;
+                if (!isAlreadyActive) {{
+                    btn.classList.add('active');
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }} else {{
+                    btn.classList.remove('active');
+                    content.style.maxHeight = null;
                 }}
+
+                // Adjust parent height after toggling
+                parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
             }});
         }});
         
-        // Search
+        // --- END OF UPDATED LOGIC ---
+
         function filterContent() {{
             const term = document.getElementById('searchInput').value.toLowerCase();
             document.querySelectorAll('.accordion-item').forEach(sub => {{
                 let hasMatch = false;
-                // Search in direct lectures
-                sub.querySelectorAll('.lecture-entry').forEach(lec => {{
-                    const match = lec.querySelector('.lecture-title').textContent.toLowerCase().includes(term);
-                    lec.style.display = match ? '' : 'none';
+                sub.querySelectorAll('.lecture-entry, .topic-accordion').forEach(item => {{
+                    const titleElement = item.querySelector('.lecture-title, .topic-header');
+                    const match = titleElement.textContent.toLowerCase().includes(term);
+                    item.style.display = match ? '' : 'none';
                     if(match) hasMatch = true;
                 }});
-                
-                // Search in topics
-                sub.querySelectorAll('.topic-accordion').forEach(topic => {{
-                    let topicHasMatch = false;
-                    topic.querySelectorAll('.lecture-entry').forEach(lec => {{
-                         const match = lec.querySelector('.lecture-title').textContent.toLowerCase().includes(term);
-                         lec.style.display = match ? '' : 'none';
-                         if(match) topicHasMatch = true;
-                    }});
-                    topic.style.display = topicHasMatch ? '' : 'none';
-                    if(topicHasMatch) hasMatch = true;
-                }});
-                
                 sub.style.display = hasMatch ? '' : 'none';
             }});
         }}
