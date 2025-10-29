@@ -53,11 +53,18 @@ def extract_topic(title):
     """
     Extract topic name from title by removing numbering patterns like #1, #2, etc.
     Returns base topic name without numbers
+    
+    Examples:
+        "Dice (पासा)"    → "Dice (पासा)"
+        "Dice (पासा) #2" → "Dice (पासा)"
+        "Inequality"     → "Inequality"
+        "Inequality #2"  → "Inequality"
     """
     # Remove patterns like #1, #2, #8, etc. at the end
     topic = re.sub(r'\s*#\d+\s*$', '', title).strip()
-    # Always return the base topic name, even if it's the same as the title
-    return topic
+    
+    # Always return topic (ensures grouping works for first lecture too)
+    return topic if topic else None
 
 def structure_data_in_order(urls):
     """
@@ -226,9 +233,11 @@ def generate_html(file_name, structured_list):
         .plyr__menu__container {{max-height: 350px !important; overflow-y: auto !important; z-index: 10001 !important;}}
         .search-bar input {{width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px;}}
         .accordion-item {{margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
-        .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative;}}
+        .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative; transition: all 0.3s ease;}}
+        .accordion-header:hover {{background: #f8f9fa;}}
         .accordion-header:after {{content: '+'; font-size: 24px; position: absolute; right: 20px; color: #888; transition: transform 0.3s ease;}}
-        .accordion-header.active:after {{transform: rotate(45deg);}}
+        .accordion-header.active {{background: #e3f2fd;}}
+        .accordion-header.active:after {{transform: rotate(45deg); color: #00b3ff;}}
         .accordion-content {{padding: 0 20px; max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out;}}
         .topic-accordion {{margin: 10px 0; border-left: 3px solid #00b3ff; padding-left: 10px;}}
         .topic-header {{width: 100%; background: #f8f9fa; border: none; text-align: left; padding: 12px 15px; font-size: 16px; font-weight: 600; cursor: pointer; border-radius: 6px; color: #333; transition: all 0.2s ease;}}
@@ -501,59 +510,53 @@ def generate_html(file_name, structured_list):
             }}
         }}
         
-        // Accordion (Subject level) - Only one open at a time
+        // ✅ CLEAN UI: Only ONE subject open at a time
         document.querySelectorAll('.accordion-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 const wasActive = btn.classList.contains('active');
                 
-                // Close all other accordions
-                document.querySelectorAll('.accordion-header').forEach(otherBtn => {{
-                    if (otherBtn !== btn) {{
-                        otherBtn.classList.remove('active');
-                        otherBtn.nextElementSibling.style.maxHeight = null;
-                    }}
+                // Close ALL subjects first
+                document.querySelectorAll('.accordion-header').forEach(header => {{
+                    header.classList.remove('active');
+                    header.nextElementSibling.style.maxHeight = null;
                 }});
                 
-                // Toggle current accordion
+                // If it wasn't active, open it (toggle behavior)
                 if (!wasActive) {{
                     btn.classList.add('active');
                     const content = btn.nextElementSibling;
                     content.style.maxHeight = content.scrollHeight + 'px';
-                }} else {{
-                    btn.classList.remove('active');
-                    btn.nextElementSibling.style.maxHeight = null;
                 }}
             }});
         }});
         
-        // Topic Accordion (Nested level) - Only one open at a time within a subject
+        // ✅ CLEAN UI: Only ONE topic open at a time (within same subject)
         document.querySelectorAll('.topic-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 const wasActive = btn.classList.contains('active');
                 const parentSubject = btn.closest('.accordion-content');
                 
-                // Close all other topic accordions within the same subject
-                parentSubject.querySelectorAll('.topic-header').forEach(otherBtn => {{
-                    if (otherBtn !== btn) {{
-                        otherBtn.classList.remove('active');
-                        otherBtn.nextElementSibling.style.maxHeight = null;
-                    }}
+                // Close ALL topics in THIS subject only
+                parentSubject.querySelectorAll('.topic-header').forEach(header => {{
+                    header.classList.remove('active');
+                    header.nextElementSibling.style.maxHeight = null;
                 }});
                 
-                // Toggle current topic accordion
+                // If it wasn't active, open it (toggle behavior)
                 if (!wasActive) {{
                     btn.classList.add('active');
                     const content = btn.nextElementSibling;
                     content.style.maxHeight = content.scrollHeight + 'px';
                     
-                    // Also expand parent if collapsed
-                    if (parentSubject && !parentSubject.style.maxHeight) {{
+                    // Also ensure parent subject is open
+                    const parentHeader = parentSubject.previousElementSibling;
+                    if (!parentHeader.classList.contains('active')) {{
+                        parentHeader.classList.add('active');
                         parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
-                        parentSubject.previousElementSibling.classList.add('active');
+                    }} else {{
+                        // Recalculate parent height after expanding topic
+                        parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
                     }}
-                }} else {{
-                    btn.classList.remove('active');
-                    btn.nextElementSibling.style.maxHeight = null;
                 }}
             }});
         }});
