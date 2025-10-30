@@ -110,23 +110,24 @@ def structure_data_in_order(urls):
         if subject == "JSON_DATA" and name == "JSON_DATA":
             # Process JSON format
             json_data = url  # In this case, url contains the JSON data
-            subject = json_data["data"]["_id"]
-            
-            # Create subject if doesn't exist
-            if subject not in subject_map:
-                new_subject = {
-                    "name": subject,
-                    "topics": {}  # Topics will be organized here
-                }
-                subject_map[subject] = new_subject
-                structured_list.append(new_subject)
-            
-            current_subject = subject_map[subject]
             
             # Process each chapter
             for chapter in json_data["data"]["chapters"]:
+                # Use subject_id from each chapter instead of _id from main data
+                subject = chapter["subject_id"]
                 chapter_title = chapter["title"]
                 chapter_link = chapter["link"]
+                
+                # Create subject if doesn't exist
+                if subject not in subject_map:
+                    new_subject = {
+                        "name": subject,
+                        "topics": {}  # Topics will be organized here
+                    }
+                    subject_map[subject] = new_subject
+                    structured_list.append(new_subject)
+                
+                current_subject = subject_map[subject]
                 
                 # Extract topic from chapter title
                 chapter_topic = extract_topic(chapter_title)
