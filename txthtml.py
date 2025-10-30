@@ -1,6 +1,7 @@
 import os
 import re
 import html
+import json
 
 def extract_names_and_urls(file_content):
     """
@@ -22,7 +23,17 @@ def parse_line(name):
     Smart parsing with 5 rules to identify subject, topic, and title
     Returns: (subject, topic, title)
     """
-    # Rule 1: Bracket wala Subject (Highest Priority)
+    # Rule 0: JSON format (Highest Priority)
+    try:
+        json_data = json.loads(name)
+        if "data" in json_data and "chapters" in json_data["data"]:
+            subject = json_data["data"]["_id"]
+            # We'll handle the chapters in structure_data_in_order
+            return subject, None, None
+    except (json.JSONDecodeError, KeyError):
+        pass  # Not a valid JSON format, continue with other rules
+    
+    # Rule 1: Bracket wala Subject
     match = re.search(r'^\((.*?)\)\s*(.+)', name)
     if match:
         subject = match.group(1).strip()
@@ -53,18 +64,11 @@ def extract_topic(title):
     """
     Extract topic name from title by removing numbering patterns like #1, #2, etc.
     Returns base topic name without numbers
-    
-    Examples:
-        "Dice (पासा)"    → "Dice (पासा)"
-        "Dice (पासा) #2" → "Dice (पासा)"
-        "Inequality"     → "Inequality"
-        "Inequality #2"  → "Inequality"
     """
     # Remove patterns like #1, #2, #8, etc. at the end
     topic = re.sub(r'\s*#\d+\s*$', '', title).strip()
-    
-    # Always return topic (ensures grouping works for first lecture too)
-    return topic if topic else None
+    # Always return the base topic name, even if it's the same as the title
+    return topic
 
 def structure_data_in_order(urls):
     """
@@ -91,6 +95,52 @@ def structure_data_in_order(urls):
         
         subject, topic, title = parse_line(name)
         
+        # Check if this is a JSON format
+        try:
+            json_data = json.loads(name)
+            if "data" in json_data and "chapters" in json_data["data"]:
+                # Process JSON format
+                subject = json_data["data"]["_id"]
+                
+                # Create subject if doesn't exist
+                if subject not in subject_map:
+                    new_subject = {
+                        "name": subject,
+                        "topics": {}  # Topics will be organized here
+                    }
+                    subject_map[subject] = new_subject
+                    structured_list.append(new_subject)
+                
+                current_subject = subject_map[subject]
+                
+                # Process each chapter
+                for chapter in json_data["data"]["chapters"]:
+                    chapter_title = chapter["title"]
+                    chapter_link = chapter["link"]
+                    
+                    # Extract topic from chapter title
+                    chapter_topic = extract_topic(chapter_title)
+                    
+                    # Create topic if doesn't exist
+                    if chapter_topic not in current_subject["topics"]:
+                        current_subject["topics"][chapter_topic] = {
+                            "name": chapter_topic,
+                            "lectures": []
+                        }
+                    
+                    # Add lecture to topic
+                    current_subject["topics"][chapter_topic]["lectures"].append({
+                        "title": chapter_title,
+                        "videos": [chapter_link],
+                        "pdfs": []
+                    })
+                
+                processed_names.add(name)
+                continue  # Skip the rest of the processing for this item
+        except (json.JSONDecodeError, KeyError):
+            pass  # Not a valid JSON format, continue with normal processing
+        
+        # Normal processing for non-JSON formats
         # Create subject if doesn't exist
         if subject not in subject_map:
             new_subject = {
@@ -233,11 +283,9 @@ def generate_html(file_name, structured_list):
         .plyr__menu__container {{max-height: 350px !important; overflow-y: auto !important; z-index: 10001 !important;}}
         .search-bar input {{width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin-bottom: 20px;}}
         .accordion-item {{margin-bottom: 10px; border-radius: 10px; overflow: hidden; background: var(--card-bg); box-shadow: 0 3px 8px rgba(0,0,0,0.08);}}
-        .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative; transition: all 0.3s ease;}}
-        .accordion-header:hover {{background: #f8f9fa;}}
+        .accordion-header {{width: 100%; background: var(--card-bg); border: none; text-align: left; padding: 18px 20px; font-size: 18px; font-weight: 600; cursor: pointer; position: relative;}}
         .accordion-header:after {{content: '+'; font-size: 24px; position: absolute; right: 20px; color: #888; transition: transform 0.3s ease;}}
-        .accordion-header.active {{background: #e3f2fd;}}
-        .accordion-header.active:after {{transform: rotate(45deg); color: #00b3ff;}}
+        .accordion-header.active:after {{transform: rotate(45deg);}}
         .accordion-content {{padding: 0 20px; max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out;}}
         .topic-accordion {{margin: 10px 0; border-left: 3px solid #00b3ff; padding-left: 10px;}}
         .topic-header {{width: 100%; background: #f8f9fa; border: none; text-align: left; padding: 12px 15px; font-size: 16px; font-weight: 600; cursor: pointer; border-radius: 6px; color: #333; transition: all 0.2s ease;}}
@@ -510,53 +558,59 @@ def generate_html(file_name, structured_list):
             }}
         }}
         
-        // ✅ CLEAN UI: Only ONE subject open at a time
+        // Accordion (Subject level) - Only one open at a time
         document.querySelectorAll('.accordion-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 const wasActive = btn.classList.contains('active');
                 
-                // Close ALL subjects first
-                document.querySelectorAll('.accordion-header').forEach(header => {{
-                    header.classList.remove('active');
-                    header.nextElementSibling.style.maxHeight = null;
+                // Close all other accordions
+                document.querySelectorAll('.accordion-header').forEach(otherBtn => {{
+                    if (otherBtn !== btn) {{
+                        otherBtn.classList.remove('active');
+                        otherBtn.nextElementSibling.style.maxHeight = null;
+                    }}
                 }});
                 
-                // If it wasn't active, open it (toggle behavior)
+                // Toggle current accordion
                 if (!wasActive) {{
                     btn.classList.add('active');
                     const content = btn.nextElementSibling;
                     content.style.maxHeight = content.scrollHeight + 'px';
+                }} else {{
+                    btn.classList.remove('active');
+                    btn.nextElementSibling.style.maxHeight = null;
                 }}
             }});
         }});
         
-        // ✅ CLEAN UI: Only ONE topic open at a time (within same subject)
+        // Topic Accordion (Nested level) - Only one open at a time within a subject
         document.querySelectorAll('.topic-header').forEach(btn => {{
             btn.addEventListener('click', () => {{
                 const wasActive = btn.classList.contains('active');
                 const parentSubject = btn.closest('.accordion-content');
                 
-                // Close ALL topics in THIS subject only
-                parentSubject.querySelectorAll('.topic-header').forEach(header => {{
-                    header.classList.remove('active');
-                    header.nextElementSibling.style.maxHeight = null;
+                // Close all other topic accordions within the same subject
+                parentSubject.querySelectorAll('.topic-header').forEach(otherBtn => {{
+                    if (otherBtn !== btn) {{
+                        otherBtn.classList.remove('active');
+                        otherBtn.nextElementSibling.style.maxHeight = null;
+                    }}
                 }});
                 
-                // If it wasn't active, open it (toggle behavior)
+                // Toggle current topic accordion
                 if (!wasActive) {{
                     btn.classList.add('active');
                     const content = btn.nextElementSibling;
                     content.style.maxHeight = content.scrollHeight + 'px';
                     
-                    // Also ensure parent subject is open
-                    const parentHeader = parentSubject.previousElementSibling;
-                    if (!parentHeader.classList.contains('active')) {{
-                        parentHeader.classList.add('active');
+                    // Also expand parent if collapsed
+                    if (parentSubject && !parentSubject.style.maxHeight) {{
                         parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
-                    }} else {{
-                        // Recalculate parent height after expanding topic
-                        parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
+                        parentSubject.previousElementSibling.classList.add('active');
                     }}
+                }} else {{
+                    btn.classList.remove('active');
+                    btn.nextElementSibling.style.maxHeight = null;
                 }}
             }});
         }});
