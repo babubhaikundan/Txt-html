@@ -6,8 +6,21 @@ import json
 def extract_names_and_urls(file_content):
     """
     Extracts (name, url) pairs from the raw text content. Required by main.py.
+    Now also handles JSON formatted content.
     """
-    lines = file_content.strip().split("\n")
+    # Check if the content is JSON format
+    file_content = file_content.strip()
+    if file_content.startswith('{') and file_content.endswith('}'):
+        try:
+            # Try to parse as JSON
+            json_data = json.loads(file_content)
+            return [("JSON_DATA", json_data)]
+        except json.JSONDecodeError:
+            # If parsing fails, fall back to regular parsing
+            pass
+    
+    # Regular parsing for name: url format
+    lines = file_content.split("\n")
     data = []
     for line in lines:
         if ":" in line:
@@ -24,14 +37,8 @@ def parse_line(name):
     Returns: (subject, topic, title)
     """
     # Rule 0: JSON format (Highest Priority)
-    try:
-        json_data = json.loads(name)
-        if "data" in json_data and "chapters" in json_data["data"]:
-            subject = json_data["data"]["_id"]
-            # We'll handle the chapters in structure_data_in_order
-            return subject, None, None
-    except (json.JSONDecodeError, KeyError):
-        pass  # Not a valid JSON format, continue with other rules
+    if name == "JSON_DATA":
+        return "JSON_DATA", None, None
     
     # Rule 1: Bracket wala Subject
     match = re.search(r'^\((.*?)\)\s*(.+)', name)
@@ -80,6 +87,10 @@ def structure_data_in_order(urls):
     
     # First pass: Collect all videos and PDFs for each unique name
     for name, url in urls:
+        if name == "JSON_DATA":
+            # Handle JSON data separately
+            continue
+            
         if name not in temp_map:
             temp_map[name] = {"videos": [], "pdfs": []}
         if ".pdf" in url.lower():
@@ -89,56 +100,53 @@ def structure_data_in_order(urls):
     
     # Second pass: Parse and organize by Subject → Topic → Lecture
     processed_names = set()
-    for name, _ in urls:
+    for name, url in urls:
         if name in processed_names:
             continue
         
         subject, topic, title = parse_line(name)
         
-        # Check if this is a JSON format
-        try:
-            json_data = json.loads(name)
-            if "data" in json_data and "chapters" in json_data["data"]:
-                # Process JSON format
-                subject = json_data["data"]["_id"]
+        # Check if this is JSON data
+        if subject == "JSON_DATA" and name == "JSON_DATA":
+            # Process JSON format
+            json_data = url  # In this case, url contains the JSON data
+            subject = json_data["data"]["_id"]
+            
+            # Create subject if doesn't exist
+            if subject not in subject_map:
+                new_subject = {
+                    "name": subject,
+                    "topics": {}  # Topics will be organized here
+                }
+                subject_map[subject] = new_subject
+                structured_list.append(new_subject)
+            
+            current_subject = subject_map[subject]
+            
+            # Process each chapter
+            for chapter in json_data["data"]["chapters"]:
+                chapter_title = chapter["title"]
+                chapter_link = chapter["link"]
                 
-                # Create subject if doesn't exist
-                if subject not in subject_map:
-                    new_subject = {
-                        "name": subject,
-                        "topics": {}  # Topics will be organized here
+                # Extract topic from chapter title
+                chapter_topic = extract_topic(chapter_title)
+                
+                # Create topic if doesn't exist
+                if chapter_topic not in current_subject["topics"]:
+                    current_subject["topics"][chapter_topic] = {
+                        "name": chapter_topic,
+                        "lectures": []
                     }
-                    subject_map[subject] = new_subject
-                    structured_list.append(new_subject)
                 
-                current_subject = subject_map[subject]
-                
-                # Process each chapter
-                for chapter in json_data["data"]["chapters"]:
-                    chapter_title = chapter["title"]
-                    chapter_link = chapter["link"]
-                    
-                    # Extract topic from chapter title
-                    chapter_topic = extract_topic(chapter_title)
-                    
-                    # Create topic if doesn't exist
-                    if chapter_topic not in current_subject["topics"]:
-                        current_subject["topics"][chapter_topic] = {
-                            "name": chapter_topic,
-                            "lectures": []
-                        }
-                    
-                    # Add lecture to topic
-                    current_subject["topics"][chapter_topic]["lectures"].append({
-                        "title": chapter_title,
-                        "videos": [chapter_link],
-                        "pdfs": []
-                    })
-                
-                processed_names.add(name)
-                continue  # Skip the rest of the processing for this item
-        except (json.JSONDecodeError, KeyError):
-            pass  # Not a valid JSON format, continue with normal processing
+                # Add lecture to topic
+                current_subject["topics"][chapter_topic]["lectures"].append({
+                    "title": chapter_title,
+                    "videos": [chapter_link],
+                    "pdfs": []
+                })
+            
+            processed_names.add(name)
+            continue  # Skip the rest of the processing for this item
         
         # Normal processing for non-JSON formats
         # Create subject if doesn't exist
