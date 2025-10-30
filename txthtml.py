@@ -616,10 +616,22 @@ def generate_html(file_name, structured_list):
                     if (parentSubject && !parentSubject.style.maxHeight) {{
                         parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
                         parentSubject.previousElementSibling.classList.add('active');
+                    }} else {{
+                        // Recalculate parent height after expanding topic
+                        setTimeout(() => {{
+                            parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
+                        }}, 50);
                     }}
                 }} else {{
                     btn.classList.remove('active');
                     btn.nextElementSibling.style.maxHeight = null;
+                    
+                    // Recalculate parent height after collapsing topic
+                    setTimeout(() => {{
+                        if (parentSubject.style.maxHeight) {{
+                            parentSubject.style.maxHeight = parentSubject.scrollHeight + 'px';
+                        }}
+                    }}, 50);
                 }}
             }});
         }});
