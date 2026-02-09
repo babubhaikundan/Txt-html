@@ -1,5 +1,5 @@
 <h1 align="center">
-  ✨ SAINI Txt to HTML Bot 
+  ✨ BabuBhaiKundan Txt to HTML Bot 
 </h1>
 
 <p align="center">
@@ -43,15 +43,11 @@
 
 ## 🤖 Bot Usernames
 
-- [@saini_contact_bot](https://t.me/saini_contact_bot)
-- [@saini_file_store_bot](https://t.me/saini_file_store_bot)
+- [@saini_contact_bot](https://t.me/kundan_yadav_bot)
+- [@saini_file_to link_bot](https://t.me/k_filetolinkbot)
 
 ---
 
-## 📂 Original Repositories
-
-- 🔗 [nikhilsainiop/Txt-html](https://github.com/nikhilsainiop/Txt-html)
-
 ---
 
-> 👨‍💻 Created with ❤️ by [@nikhil.saini.khe](https://instagram.com/nikhil.saini.khe)
+> 👨‍💻 Created with ❤️ by [@Babu Bhai Kundan](https://babubhaikundan.pages.dev)
