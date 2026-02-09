@@ -43,8 +43,8 @@
 
 ## 🤖 Bot Usernames
 
-- [@saini_contact_bot](https://t.me/kundan_yadav_bot)
-- [@saini_file_to link_bot](https://t.me/k_filetolinkbot)
+- [@Contact Developer](https://t.me/kundan_yadav_bot)
+- [@File to Link Bot](https://t.me/k_filetolinkbot)
 
 ---
 
