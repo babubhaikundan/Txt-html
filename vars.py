@@ -1,22 +1,14 @@
-#🇳‌🇮‌🇰‌🇭‌🇮‌🇱‌
-# Add your details here and then deploy by clicking on HEROKU Deploy button
 import os
 from os import environ
 
-API_ID = int(environ.get("API_ID", ""))
-API_HASH = environ.get("API_HASH", "")
+API_ID    = int(environ.get("API_ID", "0"))
+API_HASH  = environ.get("API_HASH", "")
 BOT_TOKEN = environ.get("BOT_TOKEN", "")
-CREDIT = environ.get("CREDIT", "𝕂𝕦𝕟𝕕𝕒𝕟 𝕐𝕒𝕕𝕒𝕧😎")
+CREDIT    = environ.get("CREDIT", "𝕂𝕦𝕟𝕕𝕒𝕟 𝕐𝕒𝕕𝕒𝕧😎")
+MONGO_URI = environ.get("MONGO_URI", "")
 
+# Public channel username WITHOUT @ (e.g. "BabuBhaiKundan")
+FORCE_SUB_CHANNEL = environ.get("FORCE_SUB_CHANNEL", "BabuBhaiKundan")
 
-# FORCE_CHANNEL: either a public username like "@MyChannel" OR a full invite link like "https://t.me/joinchat/AAAA..."
-# Replace the value below with your channel. Bot must be added to the channel.
-FORCE_SUB_CHANNEL = "BabuBhaiKundan"
-#WEBHOOK = True  # Don't change this
-#PORT = int(os.environ.get("PORT", 8080))  # Default to 8000 if not set
-
-
-
-
-
-
+# Space-separated admin Telegram user IDs  e.g. "123456789 987654321"
+ADMINS = [int(x) for x in environ.get("ADMINS", "").split() if x.strip().isdigit()]
