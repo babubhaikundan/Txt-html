@@ -101,7 +101,7 @@ async def start_command(client: Client, message: Message):
     await database.upsert_user(
         message.from_user.id,
         message.from_user.username,
-        message.from_user.full_name,
+        (message.from_user.first_name or "") + " " + (message.from_user.last_name or ""),
     )
     await message.reply_photo(
         photo="https://s.tfrbot.com/h/QCvWqP",
@@ -336,7 +336,7 @@ async def handle_document(client: Client, message: Message):
         await database.upsert_user(
             message.from_user.id,
             message.from_user.username,
-            message.from_user.full_name,
+            (message.from_user.first_name or "") + " " + (message.from_user.last_name or ""),
         )
         await database.log_conversion(message.from_user.id, file_name_only, lec_count)
 
@@ -379,7 +379,7 @@ async def recheck_sub_callback(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("✅ Verified! Welcome!", show_alert=False)
     await callback_query.message.delete()
 
-    await database.upsert_user(user.id, user.username, user.full_name)
+    await database.upsert_user(user.id, user.username, (user.first_name or "") + " " + (user.last_name or ""))
 
     await client.send_photo(
         chat_id=user.id,
