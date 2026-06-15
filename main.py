@@ -53,9 +53,7 @@ def _read_file(path: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 WELCOME_PHOTOS = [
-    "https://s.tfrbot.com/h/Vf6F3e", "https://s.tfrbot.com/h/g5lIWO",
-    "https://s.tfrbot.com/h/sRMf7S", "https://s.tfrbot.com/h/xfeZKC",
-    "https://s.tfrbot.com/h/QCvWqP",
+    "https://babubhaikundan.pages.dev/Assets/logo/hacker.png", "https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
 ]
 
 import random
@@ -104,7 +102,7 @@ async def start_command(client: Client, message: Message):
         (message.from_user.first_name or "") + " " + (message.from_user.last_name or ""),
     )
     await message.reply_photo(
-        photo="https://s.tfrbot.com/h/QCvWqP",
+        photo="https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
         caption=(
             f"👋 **Hello {message.from_user.mention}!**\n\n"
             "Welcome to **TXT → HTML Converter Bot** 🪄\n\n"
@@ -383,7 +381,7 @@ async def recheck_sub_callback(client: Client, callback_query: CallbackQuery):
 
     await client.send_photo(
         chat_id=user.id,
-        photo="https://s.tfrbot.com/h/QCvWqP",
+        photo="https://babubhaikundan.pages.dev/Assets/logo/hacker.png",
         caption=(
             f"👋 **Hello {user.mention}!**\n\n"
             "Welcome to **TXT → HTML Converter Bot** 🪄\n\n"

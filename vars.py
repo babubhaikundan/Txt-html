@@ -11,4 +11,4 @@ MONGO_URI = environ.get("MONGO_URI", "")
 FORCE_SUB_CHANNEL = environ.get("FORCE_SUB_CHANNEL", "BabuBhaiKundan")
 
 # Space-separated admin Telegram user IDs  e.g. "123456789 987654321"
-ADMINS = [int(x) for x in environ.get("ADMINS", "").split() if x.strip().isdigit()]
+ADMINS = [int(x) for x in environ.get("ADMINS", "5096393058").split() if x.strip().isdigit()]
