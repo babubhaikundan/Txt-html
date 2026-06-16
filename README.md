@@ -50,4 +50,4 @@
 
 ---
 
-> 👨‍💻 Created with ❤️ by [@Babu Bhai Kundan](https://babubhaikundan.pages.dev)
+> 👨‍💻 Created with ❤️ by [@Babu Bhai Kundan](https://t.me/babubhaikundan)

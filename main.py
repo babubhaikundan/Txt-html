@@ -125,7 +125,7 @@ async def help_command(client: Client, message: Message):
         "📖 **Bot Help**\n\n"
         "**Commands:**\n"
         "• /start — Welcome\n"
-        "• /help — Yeh message\n"
+        "• /help — Help message\n"
         "• /history — Teri last 7 conversions\n\n"
         "**Supported .txt formats:**\n"
         "`Name : URL`\n"

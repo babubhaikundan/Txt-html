@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: saini-txt-html-bit
+    name: txt-html-bpt
     plan: free
     env: docker
     dockerfilePath: Dockerfile
-    repo: https://github.com/nikhilsainiop/Saini-txt-direct
+    repo: https://github.com/babubhaikundan
     branch: main
     autoDeploy: false
     envVars:
