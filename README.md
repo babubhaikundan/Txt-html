@@ -17,6 +17,9 @@
 | Command | Description |
 |---------|-------------|
 | `/start` | Start the bot |
+| `/kundan` | Send txt |
+| `/history` | Last 7 conversions |
+| `/help` | Help message |
 
 ---
 
