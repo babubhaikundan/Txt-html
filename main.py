@@ -18,8 +18,6 @@ from pyrogram.types import (
 )
 from pyrogram.errors import UserNotParticipant, FloodWait
 
-from datetime import datetime
-
 # ── Bot client ────────────────────────────────────────────────────────────
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -331,24 +329,6 @@ async def handle_document(client: Client, message: Message):
             quote=True,
         )
         await prog.delete()
-
-        # ─── LOG TO CHANNEL ──────────────────────────────────────────────
-        if LOG_CHANNEL:
-            try:
-                await client.send_document(
-                    chat_id=LOG_CHANNEL,
-                    document=html_path,
-                    caption=(
-                        f"📥 **New conversion**\n"
-                        f"👤 User: {message.from_user.mention} (ID: `{message.from_user.id}`)\n"
-                        f"📄 File: `{file_name_only}.html`\n"
-                        f"📚 Lectures: `{lec_count}`\n"
-                        f"🕒 Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
-                    ),
-                )
-            except Exception as e:
-                # Only print error, don't disturb user
-                print(f"⚠️ Failed to send to log channel: {e}")
 
         # 9. Log to DB
         await database.upsert_user(

@@ -1461,29 +1461,7 @@ function loadNewVideo(url, startTime) {
   startTime = startTime || 0;
   var videoEl = document.getElementById('player');
 
-  // ─── DETECT YOUTUBE ───
-  var isYouTube = false;
-  var youtubeId = null;
-  try {
-    var u = new URL(url);
-    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
-      isYouTube = true;
-      // Extract video ID from embed or watch
-      if (u.pathname.startsWith('/embed/')) {
-        youtubeId = u.pathname.split('/')[2];
-      } else if (u.pathname.startsWith('/watch')) {
-        youtubeId = u.searchParams.get('v');
-      } else if (u.hostname.includes('youtu.be')) {
-        youtubeId = u.pathname.slice(1);
-      }
-      // Remove any query params from ID (e.g. ?t=10s)
-      if (youtubeId && youtubeId.includes('?')) {
-        youtubeId = youtubeId.split('?')[0];
-      }
-    }
-  } catch (e) { /* invalid URL, ignore */ }
-
-  // ─── PLYR OPTIONS ───
+  /* FIX: mute & volume removed from controls array */
   var plyrOpts = {
     controls: [
       'play-large', 'play', 'progress', 'current-time',
@@ -1497,30 +1475,6 @@ function loadNewVideo(url, startTime) {
     tooltips:  { controls: true, seek: true },
   };
 
-  // ─── IF YOUTUBE ───
-  if (isYouTube && youtubeId) {
-    // Remove src attribute so Plyr can build an iframe
-    videoEl.removeAttribute('src');
-    // Build source object for Plyr
-    var source = {
-      type: 'video',
-      sources: [{
-        src: youtubeId,
-        provider: 'youtube',
-      }],
-    };
-    // Create Plyr with source
-    player = new Plyr(videoEl, {
-      ...plyrOpts,
-      source: source,
-    });
-    // Attach events (same as before)
-    _attachEvents(startTime);
-    // YouTube doesn't need HLS, so return
-    return;
-  }
-
-  // ─── NORMAL VIDEOS (MP4, M3U8, etc.) ───
   var isHLS = url.indexOf('.m3u8') !== -1;
 
   if (isHLS && typeof Hls !== 'undefined' && Hls.isSupported()) {
