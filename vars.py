@@ -19,30 +19,44 @@ FORCE_SUB_CHANNEL = environ.get("FORCE_SUB_CHANNEL", "BabuBhaiKundan")
 ADMINS = [int(x) for x in environ.get("ADMINS", "5096393058").split() if x.strip().isdigit()]
 
 
-#________________________________________
+# ========================================
+# Proxy Configuration
+# ========================================
 
-# Proxy Configuration setup for oracle or vps paste in config.py or vars.py
 
-# Helper function to check boolean values
 def _is_true(value):
     if value is None:
         return False
-    
+
     return str(value).strip().lower() in (
-        "1", "true", "yes", "on", "enable", "enabled"
+        "1",
+        "true",
+        "yes",
+        "on",
+        "enable",
+        "enabled"
     )
 
-# Load Variables
+
 USE_PROXY = _is_true(os.getenv("USE_PROXY"))
 
 PYROGRAM_PROXY = None
 
-# Proxy Logic
 if USE_PROXY:
+
+    scheme = os.getenv("PROXY_SCHEME", "socks5").strip() or "socks5"
+
+    host = os.getenv("PROXY_HOST", "127.0.0.1").strip() or "127.0.0.1"
+
+    try:
+        port = int(os.getenv("PROXY_PORT", "9050"))
+    except (ValueError, TypeError):
+        port = 9050
+
     PYROGRAM_PROXY = {
-        "scheme": os.getenv("PROXY_SCHEME", "socks5").strip(),
-        "hostname": os.getenv("PROXY_HOST", "127.0.0.1").strip(),
-        "port": int(os.getenv("PROXY_PORT", "9050"))
+        "scheme": scheme,
+        "hostname": host,
+        "port": port
     }
 
-#________________________________________
+# ========================================
