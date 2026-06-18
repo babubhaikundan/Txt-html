@@ -10,6 +10,20 @@ Fixes in v3.1:
 
 import re, html, json, hashlib, textwrap
 
+# ── YouTube URL detector ───────────────────────────────────────────────────
+_YT_RE = re.compile(
+    r'(?:https?://)?(?:www\.)?'
+    r'(?:youtube\.com/(?:watch\?(?:.*&)?v=|embed/|live/|shorts/)'
+    r'|youtu\.be/)'
+    r'([a-zA-Z0-9_-]{11})',
+    re.IGNORECASE,
+)
+
+def _get_youtube_id(url: str):
+    """Return 11-char YouTube video ID, or None if not a YouTube URL."""
+    m = _YT_RE.search(url)
+    return m.group(1) if m else None
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  DATA EXTRACTION
@@ -170,13 +184,26 @@ def _lecture_html(lec: dict, global_index: int) -> str:
 
     video_links = ""
     for i, vurl in enumerate(videos, 1):
-        label = f"Part {i} &#9654;" if multi else "&#9654;&nbsp;Play"
-        eu    = html.escape(vurl, quote=True)
+        yt_id    = _get_youtube_id(vurl)
+        is_yt    = yt_id is not None
+        if multi:
+            label = f"Part {i} &#9654;"
+        elif is_yt:
+            label = "&#9654;&nbsp;YouTube"
+        else:
+            label = "&#9654;&nbsp;Play"
+        extra_cls = " yt-item" if is_yt else ""
+        if is_yt:
+            data_part = f'data-yt="{html.escape(yt_id, quote=True)}"'
+            aria_lbl  = f"Watch on YouTube: {eta}"
+        else:
+            data_part = f'data-url="{html.escape(vurl, quote=True)}"'
+            aria_lbl  = f"Play {eta}{(' part ' + str(i)) if multi else ''}"
         video_links += (
-            f'<a href="#" class="list-item video-item" role="button" tabindex="0"'
-            f' data-url="{eu}" data-lid="{lid}" data-title="{eta}"'
+            f'<a href="#" class="list-item video-item{extra_cls}" role="button" tabindex="0"'
+            f' {data_part} data-lid="{lid}" data-title="{eta}"'
             f' data-gidx="{global_index}"'
-            f' aria-label="Play {eta}{(" part " + str(i)) if multi else ""}"'
+            f' aria-label="{html.escape(aria_lbl, quote=True)}"'
             f' onclick="playVideo(event,this)"'
             f' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){{event.preventDefault();playVideo(event,this);}}">'
             f'{label}</a>'
@@ -637,6 +664,22 @@ html.dark .video-item:hover,html.dark .video-item.playing{
 .pdf-item:hover{background:#ea580c;color:#fff;border-color:#ea580c;transform:translateY(-1px);}
 html.dark .pdf-item{background:#431407;color:#fb923c;border-color:#7c2d12;}
 
+/* YouTube button */
+.yt-item{background:#fff1f1;color:#cc0000;border-color:#ffb3b3;}
+.yt-item:hover,.yt-item.playing{background:#cc0000;color:#fff;border-color:#cc0000;transform:translateY(-1px);}
+html.dark .yt-item{background:#3d0000;color:#ff8080;border-color:#660000;}
+html.dark .yt-item:hover,html.dark .yt-item.playing{background:#cc0000;color:#fff;}
+
+/* YouTube embed wrapper */
+.yt-embed-wrapper{
+  display:none;width:100%;aspect-ratio:16/9;
+  border-radius:var(--radius);overflow:hidden;
+  margin-bottom:12px;background:#000;
+  position:sticky;top:calc(var(--header-h) + 3px);z-index:1000;
+  box-shadow:0 8px 32px rgba(0,0,0,.28);
+}
+#yt-frame{width:100%;height:100%;border:none;display:block;}
+
 /* ── Empty state ── */
 .empty-msg{text-align:center;padding:48px;color:var(--muted);font-size:15px;}
 
@@ -1047,7 +1090,15 @@ function checkResume() {
 }
 function resumeVideo() {
   document.getElementById('resume-banner').style.display = 'none';
-  if (window._resumeUrl) loadNewVideo(window._resumeUrl, window._resumeTime || 0);
+  if (!window._resumeUrl) return;
+  var ytId = _getYtId(window._resumeUrl);
+  if (ytId) {
+    _showYTPlayer(ytId);
+    setNowPlaying('Resuming…', -1);
+  } else {
+    _showDirectPlayer();
+    loadNewVideo(window._resumeUrl, window._resumeTime || 0);
+  }
 }
 function dismissResume() {
   document.getElementById('resume-banner').style.display = 'none';
@@ -1335,19 +1386,46 @@ function retryVideo() {
 }
 
 /* ═══════════════════════════════════
+   YOUTUBE SUPPORT
+═══════════════════════════════════ */
+function _getYtId(url) {
+  if (!url) return null;
+  var m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+function _showYTPlayer(ytId) {
+  var pw    = document.getElementById('player-wrapper');
+  var ytW   = document.getElementById('yt-embed-wrapper');
+  var frame = document.getElementById('yt-frame');
+  if (pw)    pw.style.display = 'none';
+  if (frame) frame.src = 'https://www.youtube.com/embed/' + ytId +
+    '?autoplay=1&rel=0&modestbranding=1&enablejsapi=1';
+  if (ytW)   ytW.style.display = 'block';
+  setLoading(false);
+}
+function _showDirectPlayer() {
+  var pw    = document.getElementById('player-wrapper');
+  var ytW   = document.getElementById('yt-embed-wrapper');
+  var frame = document.getElementById('yt-frame');
+  if (ytW)   ytW.style.display = 'none';
+  if (frame) frame.src = '';   /* stop YouTube audio */
+  if (pw)    pw.style.display = 'block';
+}
+
+/* ═══════════════════════════════════
    PLAYER — PLAY VIDEO
 ═══════════════════════════════════ */
 function playVideo(event, element) {
   if (event) event.preventDefault();
-  var url   = element.dataset.url;
+  var ytId  = element.dataset.yt  || null;
+  var url   = element.dataset.url || null;
   var lid   = element.dataset.lid   || null;
   var title = element.dataset.title || '';
   var gidx  = parseInt(element.dataset.gidx, 10);
-  if (!url) return;
+  if (!ytId && !url) return;
 
   _destroyPlayer();
   hideError();
-  setLoading(true);
   lastErrorUrl = url;
 
   if (currentlyPlayingBtn) currentlyPlayingBtn.classList.remove('playing');
@@ -1365,16 +1443,21 @@ function playVideo(event, element) {
     }, 400);
   }
 
-  currentLid       = lid;
-  currentPlayUrl   = url;
-  currentPlayTitle = title;
-  currentGIdx      = gidx;
-
+  currentLid        = lid;
+  currentPlayTitle  = title;
+  currentGIdx       = gidx;
   setNowPlaying(title, gidx);
 
-  setTimeout(function () {
-    loadNewVideo(url, 0);
-  }, 50);
+  if (ytId) {
+    currentPlayUrl = 'https://youtu.be/' + ytId;
+    _showYTPlayer(ytId);
+    showToast('▶ YouTube video loading…', 'info', 1800);
+  } else {
+    currentPlayUrl = url;
+    setLoading(true);
+    _showDirectPlayer();
+    setTimeout(function () { loadNewVideo(url, 0); }, 50);
+  }
 }
 
 function _openParentAccordions(entry) {
@@ -1835,7 +1918,14 @@ def generate_html(file_name: str, structured_list: list) -> str:
         '      <p id="player-error-msg">An error occurred while loading the video.</p>',
         '      <button class="retry-btn" onclick="retryVideo()">\u21ba Retry</button>',
         '    </div>',
-        '  </div>',
+        '  </div>',   # end .player-wrapper
+
+        # ── YouTube embed (shown instead of Plyr for YouTube URLs) ──
+        '<div class="yt-embed-wrapper" id="yt-embed-wrapper">',
+        '  <iframe id="yt-frame" src="" allowfullscreen',
+        '    allow="autoplay; encrypted-media; picture-in-picture"',
+        '    aria-label="YouTube video player"></iframe>',
+        '</div>',
 
         '  <div id="now-playing" class="now-playing" aria-live="polite">',
         '    <span class="now-playing-dot" aria-hidden="true"></span>',

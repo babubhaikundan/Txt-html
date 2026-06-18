@@ -9,7 +9,7 @@ import asyncio
 import shutil
 
 import txthtml
-from vars import API_ID, API_HASH, BOT_TOKEN, FORCE_SUB_CHANNEL, ADMINS, MONGO_URI
+from vars import API_ID, API_HASH, BOT_TOKEN, FORCE_SUB_CHANNEL, ADMINS, MONGO_URI, PROXY
 import db as database
 
 from pyrogram import Client, filters
@@ -19,7 +19,7 @@ from pyrogram.types import (
 from pyrogram.errors import UserNotParticipant, FloodWait
 
 # ── Bot client ────────────────────────────────────────────────────────────
-bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, proxy=PROXY)
 
 DOWNLOADS_DIR   = "./downloads"
 MAX_TXT_SIZE_MB = 10          # Reject .txt files larger than this
@@ -125,8 +125,9 @@ async def help_command(client: Client, message: Message):
         "📖 **Bot Help**\n\n"
         "**Commands:**\n"
         "• /start — Welcome\n"
+        "• /kundan — Send txt file\n"
         "• /help — Help message\n"
-        "• /history — Teri last 7 conversions\n\n"
+        "• /history — Last 7 conversions\n\n"
         "**Supported .txt formats:**\n"
         "`Name : URL`\n"
         "`Subject || Topic #1 : URL`\n"
@@ -162,7 +163,7 @@ async def history_command(client: Client, message: Message):
             quote=True,
         )
         return
-    lines = [f"📋 **Teri Last {len(history)} Conversions:**\n"]
+    lines = [f"📋 ** Last {len(history)} Conversions:**\n"]
     for i, item in enumerate(history, 1):
         fname   = item.get("file_name", "Unknown")
         at      = item.get("at")
