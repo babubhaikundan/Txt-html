@@ -14,6 +14,15 @@ MONGO_URI = environ.get("MONGO_URI", "")
 # Public channel username WITHOUT @ (e.g. "BabuBhaiKundan")
 FORCE_SUB_CHANNEL = environ.get("FORCE_SUB_CHANNEL", "BabuBhaiKundan")
 
+# Log channel — channel ID (e.g. "-1001234567890") ya username (e.g. "MyLogChannel")
+# Bot ko us channel ka admin hona chahiye
+_log_raw = environ.get("LOG_CHANNEL", "-1004489412273").strip()
+if _log_raw.lstrip("-").isdigit():
+    LOG_CHANNEL = int(_log_raw)
+else:
+    LOG_CHANNEL = _log_raw or None   # None means logging disabled
+ 
+
 
 # Space-separated admin Telegram user IDs  e.g. "123456789 987654321"
 ADMINS = [int(x) for x in environ.get("ADMINS", "5096393058").split() if x.strip().isdigit()]

@@ -1,15 +1,17 @@
 """
 main.py — TXT → HTML Converter Bot
 Features: Force-sub, user DB tracking, /stats, /history, /broadcast,
-          encoding fallback, safe temp-file cleanup, file-size guard.
+          encoding fallback, safe temp-file cleanup, file-size guard,
+          log channel forwarding.
 """
 
 import os
 import asyncio
 import shutil
+import datetime
 
 import txthtml
-from vars import API_ID, API_HASH, BOT_TOKEN, FORCE_SUB_CHANNEL, ADMINS, MONGO_URI, PYROGRAM_PROXY
+from vars import API_ID, API_HASH, BOT_TOKEN, FORCE_SUB_CHANNEL, ADMINS, MONGO_URI, LOG_CHANNEL, PYROGRAM_PROXY
 import db as database
 
 from pyrogram import Client, filters
@@ -22,12 +24,65 @@ from pyrogram.errors import UserNotParticipant, FloodWait
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, proxy=PYROGRAM_PROXY)
 
 DOWNLOADS_DIR   = "./downloads"
-MAX_TXT_SIZE_MB = 10          # Reject .txt files larger than this
+MAX_TXT_SIZE_MB = 10
 ENCODINGS       = ("utf-8", "utf-8-sig", "latin-1", "cp1252")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  HELPERS
+#  LOG CHANNEL HELPER
+# ═══════════════════════════════════════════════════════════════════════════
+
+async def _send_log(
+    client: Client,
+    user: object,
+    txt_path: str,
+    html_path: str,
+    file_name: str,
+    lec_count: int,
+):
+    """
+    Send conversion details to LOG_CHANNEL silently.
+    Sends: info message + original .txt + generated .html
+    Fails silently if LOG_CHANNEL not set or bot lacks permission.
+    """
+    if not LOG_CHANNEL:
+        return
+    try:
+        now     = datetime.datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
+        uname   = f"@{user.username}" if user.username else "—"
+        fname   = (user.first_name or "") + " " + (user.last_name or "")
+        fname   = fname.strip() or "Unknown"
+
+        caption = (
+            f"📥 **New Conversion**\n\n"
+            f"👤 **User:** {fname} ({uname})\n"
+            f"🆔 **ID:** `{user.id}`\n"
+            f"📄 **File:** `{file_name}.txt`\n"
+            f"📚 **Lectures:** `{lec_count}`\n"
+            f"⏰ **Time:** `{now}`"
+        )
+
+        # Info message
+        await client.send_message(LOG_CHANNEL, caption)
+
+        # Original .txt file
+        if os.path.exists(txt_path):
+            await client.send_document(
+                LOG_CHANNEL,
+                document=txt_path,
+                caption=f"📄 Original: `{file_name}.txt`",
+            )
+
+        # Generated .html file
+        if os.path.exists(html_path):
+            await client.send_document(
+                LOG_CHANNEL,
+                document=html_path,
+                caption=f"🌐 Generated: `{file_name}.html`",
+            )
+
+    except Exception as e:
+        print(f"[LOG] Failed to send log: {e}")
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _is_admin(user_id: int) -> bool:
@@ -53,7 +108,7 @@ def _read_file(path: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 WELCOME_PHOTOS = [
-    "https://babubhaikundan.pages.dev/Assets/logo/hacker.png", "https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
+   "https://babubhaikundan.pages.dev/Assets/logo/hacker.png", "https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
 ]
 
 import random
@@ -99,10 +154,10 @@ async def start_command(client: Client, message: Message):
     await database.upsert_user(
         message.from_user.id,
         message.from_user.username,
-        (message.from_user.first_name or "") + " " + (message.from_user.last_name or ""),
+        message.from_user.full_name,
     )
     await message.reply_photo(
-        photo="https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
+        photo="https://s.tfrbot.com/h/QCvWqP",
         caption=(
             f"👋 **Hello {message.from_user.mention}!**\n\n"
             "Welcome to **TXT → HTML Converter Bot** 🪄\n\n"
@@ -126,7 +181,7 @@ async def help_command(client: Client, message: Message):
         "**Commands:**\n"
         "• /start — Welcome\n"
         "• /kundan — Send txt file\n"
-        "• /help — Help message\n"
+        "• /help — Yeh message\n"
         "• /history — Last 7 conversions\n\n"
         "**Supported .txt formats:**\n"
         "`Name : URL`\n"
@@ -332,12 +387,23 @@ async def handle_document(client: Client, message: Message):
         await prog.delete()
 
         # 9. Log to DB
+        _full = (message.from_user.first_name or "") + " " + (message.from_user.last_name or "")
         await database.upsert_user(
             message.from_user.id,
             message.from_user.username,
-            (message.from_user.first_name or "") + " " + (message.from_user.last_name or ""),
+            _full.strip(),
         )
         await database.log_conversion(message.from_user.id, file_name_only, lec_count)
+
+        # 10. Forward to log channel (silent — never affects user)
+        await _send_log(
+            client,
+            message.from_user,
+            downloaded_path,
+            html_path,
+            file_name_only,
+            lec_count,
+        )
 
     except Exception as e:
         await prog.edit_text(
@@ -378,7 +444,7 @@ async def recheck_sub_callback(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("✅ Verified! Welcome!", show_alert=False)
     await callback_query.message.delete()
 
-    await database.upsert_user(user.id, user.username, (user.first_name or "") + " " + (user.last_name or ""))
+    await database.upsert_user(user.id, user.username, user.full_name)
 
     await client.send_photo(
         chat_id=user.id,
