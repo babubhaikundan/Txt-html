@@ -18,31 +18,31 @@ FORCE_SUB_CHANNEL = environ.get("FORCE_SUB_CHANNEL", "BabuBhaiKundan")
 # Space-separated admin Telegram user IDs  e.g. "123456789 987654321"
 ADMINS = [int(x) for x in environ.get("ADMINS", "5096393058").split() if x.strip().isdigit()]
 
-# __________________________________________
-# Proxy set up for VPS (Oracle)
 
+#________________________________________
 
+# Proxy Configuration setup for oracle or vps paste in config.py or vars.py
+
+# Helper function to check boolean values
 def _is_true(value):
     if value is None:
         return False
-
+    
     return str(value).strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-        "enable",
-        "enabled"
+        "1", "true", "yes", "on", "enable", "enabled"
     )
 
-
+# Load Variables
 USE_PROXY = _is_true(os.getenv("USE_PROXY"))
 
-PROXY = None
+PYROGRAM_PROXY = None
 
+# Proxy Logic
 if USE_PROXY:
-    PROXY = {
+    PYROGRAM_PROXY = {
         "scheme": os.getenv("PROXY_SCHEME", "socks5").strip(),
         "hostname": os.getenv("PROXY_HOST", "127.0.0.1").strip(),
         "port": int(os.getenv("PROXY_PORT", "9050"))
     }
+
+#________________________________________

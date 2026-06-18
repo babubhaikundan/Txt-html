@@ -9,7 +9,7 @@ import asyncio
 import shutil
 
 import txthtml
-from vars import API_ID, API_HASH, BOT_TOKEN, FORCE_SUB_CHANNEL, ADMINS, MONGO_URI, PROXY
+from vars import API_ID, API_HASH, BOT_TOKEN, FORCE_SUB_CHANNEL, ADMINS, MONGO_URI, PYROGRAM_PROXY
 import db as database
 
 from pyrogram import Client, filters
@@ -19,7 +19,7 @@ from pyrogram.types import (
 from pyrogram.errors import UserNotParticipant, FloodWait
 
 # ── Bot client ────────────────────────────────────────────────────────────
-bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, proxy=PROXY)
+bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, proxy=PYROGRAM_PROXY)
 
 DOWNLOADS_DIR   = "./downloads"
 MAX_TXT_SIZE_MB = 10          # Reject .txt files larger than this
