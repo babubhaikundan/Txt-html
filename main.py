@@ -157,7 +157,7 @@ async def start_command(client: Client, message: Message):
         message.from_user.full_name,
     )
     await message.reply_photo(
-        photo="https://s.tfrbot.com/h/QCvWqP",
+        photo="https://babubhaikundan.pages.dev/Assets/logo/hacker.png",
         caption=(
             f"👋 **Hello {message.from_user.mention}!**\n\n"
             "Welcome to **TXT → HTML Converter Bot** 🪄\n\n"
