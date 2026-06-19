@@ -442,6 +442,8 @@ body{
   transition:background .2s;
 }
 .retry-btn:hover{background:var(--accent);}
+.open-link-btn{background:rgba(255,255,255,.12);margin-left:8px;text-decoration:none;}
+.open-link-btn:hover{background:rgba(255,255,255,.22);}
 
 .plyr{border-radius:var(--radius);}
 
@@ -1379,10 +1381,15 @@ function setLoading(on) {
   if (el) el.classList.toggle('visible', on);
 }
 function showError(msg) {
-  var el = document.getElementById('player-error');
-  var pm = document.getElementById('player-error-msg');
+  var el   = document.getElementById('player-error');
+  var pm   = document.getElementById('player-error-msg');
+  var link = document.getElementById('player-error-link');
   if (el) el.classList.add('visible');
   if (pm) pm.textContent = msg || 'An error occurred while loading the video.';
+  if (link) {
+    if (lastErrorUrl) { link.href = lastErrorUrl; link.style.display = 'inline-flex'; }
+    else { link.style.display = 'none'; }
+  }
 }
 function hideError() {
   var el = document.getElementById('player-error');
@@ -1919,7 +1926,7 @@ def generate_html(file_name: str, structured_list: list) -> str:
         '<main class="main-container" id="main-content">',
 
         '  <div class="player-wrapper" id="player-wrapper">',
-        '    <video id="player" playsinline controls crossorigin preload="none"',
+        '    <video id="player" playsinline controls preload="none"',
         '      aria-label="Lecture video player"></video>',
         '    <div class="player-loading" id="player-loading" aria-live="polite" aria-label="Loading video">',
         '      <div class="spinner" role="status"></div>',
@@ -1928,6 +1935,7 @@ def generate_html(file_name: str, structured_list: list) -> str:
         '      <div class="player-error-title">\u26a0\ufe0f Failed to load video</div>',
         '      <p id="player-error-msg">An error occurred while loading the video.</p>',
         '      <button class="retry-btn" onclick="retryVideo()">\u21ba Retry</button>',
+        '      <a class="retry-btn open-link-btn" id="player-error-link" href="#" target="_blank" rel="noopener" style="display:none">\U0001f517 Direct Link Kholo</a>',
         '    </div>',
         '  </div>',   # end .player-wrapper
 
