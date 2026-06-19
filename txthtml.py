@@ -679,6 +679,14 @@ html.dark .yt-item:hover,html.dark .yt-item.playing{background:#cc0000;color:#ff
   box-shadow:0 8px 32px rgba(0,0,0,.28);
 }
 #yt-frame{width:100%;height:100%;border:none;display:block;}
+.yt-open-link{
+  position:absolute;bottom:10px;right:10px;z-index:5;
+  background:rgba(0,0,0,.75);color:#fff;
+  padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;
+  text-decoration:none;display:flex;align-items:center;gap:5px;
+  transition:background .2s;backdrop-filter:blur(4px);
+}
+.yt-open-link:hover{background:rgba(204,0,0,.9);}
 
 /* ── Empty state ── */
 .empty-msg{text-align:center;padding:48px;color:var(--muted);font-size:15px;}
@@ -1397,9 +1405,12 @@ function _showYTPlayer(ytId) {
   var pw    = document.getElementById('player-wrapper');
   var ytW   = document.getElementById('yt-embed-wrapper');
   var frame = document.getElementById('yt-frame');
+  var link  = document.getElementById('yt-open-link');
   if (pw)    pw.style.display = 'none';
-  if (frame) frame.src = 'https://www.youtube.com/embed/' + ytId +
-    '?autoplay=1&rel=0&modestbranding=1&enablejsapi=1';
+  /* youtube-nocookie.com = fewer restrictions, no enablejsapi = no origin check */
+  if (frame) frame.src = 'https://www.youtube-nocookie.com/embed/' + ytId +
+    '?autoplay=1&rel=0&fs=1&color=white';
+  if (link)  link.href = 'https://www.youtube.com/watch?v=' + ytId;
   if (ytW)   ytW.style.display = 'block';
   setLoading(false);
 }
@@ -1922,9 +1933,14 @@ def generate_html(file_name: str, structured_list: list) -> str:
 
         # ── YouTube embed (shown instead of Plyr for YouTube URLs) ──
         '<div class="yt-embed-wrapper" id="yt-embed-wrapper">',
-        '  <iframe id="yt-frame" src="" allowfullscreen',
-        '    allow="autoplay; encrypted-media; picture-in-picture"',
+        '  <iframe id="yt-frame" src=""',
+        '    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"',
+        '    referrerpolicy="no-referrer-when-downgrade"',
+        '    allowfullscreen',
         '    aria-label="YouTube video player"></iframe>',
+        '  <a id="yt-open-link" class="yt-open-link" href="#" target="_blank" rel="noopener">',
+        '    &#9654; Open in YouTube',
+        '  </a>',
         '</div>',
 
         '  <div id="now-playing" class="now-playing" aria-live="polite">',

@@ -16,7 +16,8 @@ import db as database
 
 from pyrogram import Client, filters
 from pyrogram.types import (
-    Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+    Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
+    InputMediaDocument,
 )
 from pyrogram.errors import UserNotParticipant, FloodWait
 
@@ -41,17 +42,16 @@ async def _send_log(
     lec_count: int,
 ):
     """
-    Send conversion details to LOG_CHANNEL silently.
-    Sends: info message + original .txt + generated .html
-    Fails silently if LOG_CHANNEL not set or bot lacks permission.
+    Send .txt + .html as ONE grouped message to LOG_CHANNEL.
+    Caption on first file contains full user info.
+    Fails silently — never affects the user's conversion.
     """
     if not LOG_CHANNEL:
         return
     try:
-        now     = datetime.datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
-        uname   = f"@{user.username}" if user.username else "—"
-        fname   = (user.first_name or "") + " " + (user.last_name or "")
-        fname   = fname.strip() or "Unknown"
+        now   = datetime.datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
+        uname = f"@{user.username}" if user.username else "—"
+        fname = ((user.first_name or "") + " " + (user.last_name or "")).strip() or "Unknown"
 
         caption = (
             f"📥 **New Conversion**\n\n"
@@ -62,27 +62,27 @@ async def _send_log(
             f"⏰ **Time:** `{now}`"
         )
 
-        # Info message
-        await client.send_message(LOG_CHANNEL, caption)
+        txt_ok  = os.path.exists(txt_path)
+        html_ok = os.path.exists(html_path)
 
-        # Original .txt file
-        if os.path.exists(txt_path):
-            await client.send_document(
+        if txt_ok and html_ok:
+            # Both files → single grouped message (1 log entry per user)
+            await client.send_media_group(
                 LOG_CHANNEL,
-                document=txt_path,
-                caption=f"📄 Original: `{file_name}.txt`",
+                media=[
+                    InputMediaDocument(media=txt_path,  caption=caption),
+                    InputMediaDocument(media=html_path, caption=f"🌐 `{file_name}.html`"),
+                ],
             )
-
-        # Generated .html file
-        if os.path.exists(html_path):
-            await client.send_document(
-                LOG_CHANNEL,
-                document=html_path,
-                caption=f"🌐 Generated: `{file_name}.html`",
-            )
+        elif txt_ok:
+            await client.send_document(LOG_CHANNEL, document=txt_path, caption=caption)
+        elif html_ok:
+            await client.send_document(LOG_CHANNEL, document=html_path, caption=caption)
+        else:
+            await client.send_message(LOG_CHANNEL, caption)
 
     except Exception as e:
-        print(f"[LOG] Failed to send log: {e}")
+        print(f"[LOG] Failed: {e}")
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _is_admin(user_id: int) -> bool:
@@ -108,7 +108,7 @@ def _read_file(path: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 WELCOME_PHOTOS = [
-   "https://babubhaikundan.pages.dev/Assets/logo/hacker.png", "https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
+    "https://babubhaikundan.pages.dev/Assets/logo/hacker.png", "https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
 ]
 
 import random
@@ -157,7 +157,7 @@ async def start_command(client: Client, message: Message):
         message.from_user.full_name,
     )
     await message.reply_photo(
-        photo="https://babubhaikundan.pages.dev/Assets/logo/hacker.png",
+        photo="https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
         caption=(
             f"👋 **Hello {message.from_user.mention}!**\n\n"
             "Welcome to **TXT → HTML Converter Bot** 🪄\n\n"
@@ -180,9 +180,8 @@ async def help_command(client: Client, message: Message):
         "📖 **Bot Help**\n\n"
         "**Commands:**\n"
         "• /start — Welcome\n"
-        "• /kundan — Send txt file\n"
         "• /help — Yeh message\n"
-        "• /history — Last 7 conversions\n\n"
+        "• /history — Teri last 7 conversions\n\n"
         "**Supported .txt formats:**\n"
         "`Name : URL`\n"
         "`Subject || Topic #1 : URL`\n"
@@ -218,7 +217,7 @@ async def history_command(client: Client, message: Message):
             quote=True,
         )
         return
-    lines = [f"📋 ** Last {len(history)} Conversions:**\n"]
+    lines = [f"📋 **Teri Last {len(history)} Conversions:**\n"]
     for i, item in enumerate(history, 1):
         fname   = item.get("file_name", "Unknown")
         at      = item.get("at")
@@ -448,7 +447,7 @@ async def recheck_sub_callback(client: Client, callback_query: CallbackQuery):
 
     await client.send_photo(
         chat_id=user.id,
-        photo="https://babubhaikundan.pages.dev/Assets/logo/hacker.png",
+        photo="https://babubhaikundan.pages.dev/Assets/logo/bbk.png",
         caption=(
             f"👋 **Hello {user.mention}!**\n\n"
             "Welcome to **TXT → HTML Converter Bot** 🪄\n\n"
@@ -479,6 +478,27 @@ async def show_help_callback(client: Client, callback_query: CallbackQuery):
 if __name__ == "__main__":
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     database.init_db(MONGO_URI)
-    print("🤖 Bot starting...")
+
+    print(r"""
+╔══════════════════════════════════════════════════════════════╗
+║                     🚀 BBK FILE BOT 🚀                      ║
+╠══════════════════════════════════════════════════════════════╣
+║                  👨‍💻 Developer: Babu Bhai Kundan             ║
+║                                                              ║
+║  🤖 Telegram File To Link Bot                               ║
+║  ⚡ Fast • Secure • Reliable                                ║
+║                                                              ║
+║  📢 Join on Telegram:      @BabuBhaiKundan                  ║
+║  💬 Contact on Telegram:   @Kundan_Yadav_Bot               ║
+╠══════════════════════════════════════════════════════════════╣
+║                  🤖 Bot starting...                         ║
+╚══════════════════════════════════════════════════════════════╝
+""")
+
     bot.run()
-    print("🛑 Bot stopped.")
+
+    print("""
+╔══════════════════════════════════════════════════════════════╗
+║                    🛑 Bot stopped.                          ║
+╚══════════════════════════════════════════════════════════════╝
+""")
